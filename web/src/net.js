@@ -10,7 +10,10 @@ export const BACKEND_BASE = (typeof window !== 'undefined' && window.PIPESENSE_B
   ? String(window.PIPESENSE_BACKEND_URL).replace(/\/+$/, '')
   : '';
 
-export const BACKEND_TIMEOUT_MS = 5000;
+// W&B Inference can cold-start during a live event. Keep enough headroom to
+// preserve the traced coaching result instead of prematurely presenting the
+// offline fallback while the server is still completing a valid request.
+export const BACKEND_TIMEOUT_MS = 12000;
 export const BACKEND_COOLDOWN_MS = 45000;
 
 async function fetchJson(url, options = {}, timeoutMs = BACKEND_TIMEOUT_MS) {
