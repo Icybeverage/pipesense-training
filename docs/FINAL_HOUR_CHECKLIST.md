@@ -24,7 +24,9 @@ Update this file only from verified artifacts or live responses.
 - [x] Vercel production URL deployed and smoke-tested in Chromium:
   <https://pipesense-training.vercel.app>. The full automated lesson completed
   at score 100 with live W&B Inference and an active Weave trace.
-- [ ] Public repository URL confirmed.
-- [ ] Official submission form URL obtained from the on-site organizers. The
-  public Luma and W&B event pages do not publish the submission link.
-- [ ] Final submission entered before 1:00 PM PDT.
+- [x] Public repository URL confirmed:
+  <https://github.com/Icybeverage/pipesense-training>.
+- [x] Public narrated video, silent backup and W&B proof-image URLs included in
+  both the deployed site and repository.
+- [x] Submission-form discovery intentionally deferred at the user's direction;
+  final effort is focused on working demos, repositories and websites.

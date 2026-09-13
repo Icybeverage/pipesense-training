@@ -4,9 +4,9 @@ PipeSense is a CoreWeave Hacks project: a first-person, gesture-driven plumbing 
 
 **Live demo:** <https://pipesense-training.vercel.app>
 
-**Submission assets:** [Maya-narrated demo](submission/pipesense-demo-maya.mp4) ·
-[silent backup](submission/pipesense-demo-silent.mp4) ·
-[W&B presentation page](submission/wandb-story-slide.png)
+**Submission assets:** [Maya-narrated demo](https://pipesense-training.vercel.app/submission/pipesense-demo-maya.mp4) ·
+[silent backup](https://pipesense-training.vercel.app/submission/pipesense-demo-silent.mp4) ·
+[W&B presentation page](https://pipesense-training.vercel.app/submission/wandb-story-slide.png)
 
 The focused demo lesson is a professional P-trap installation. A deterministic simulation measures sequence, alignment, joint tightness, leaks, retained water and the sewer-gas seal. Observer, Coach, and Evaluator agents explain the error, select an intervention, preserve it for the next retry, and compare the new score with the baseline. W&B Weave traces that complete loop.
 
