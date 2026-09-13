@@ -130,31 +130,31 @@ const session = {
   handsHinted: false,
   calibNotified: false,
   tutorialIndex: 0,
+  webcamGrade: null,
 };
 
 let propsOut = null;
 const tmpVec = new THREE.Vector3();
-let handLabOpen = false;
+
 const HAND_EDGES = [
   [0,1],[1,2],[2,3],[3,4], [0,5],[5,6],[6,7],[7,8],
   [5,9],[9,10],[10,11],[11,12], [9,13],[13,14],[14,15],[15,16],
   [13,17],[0,17],[17,18],[18,19],[19,20],
 ];
+const FINGERTIPS = new Set([4, 8, 12, 16, 20]);
+let camStatusText = '';
 
-function toggleHandLab(force) {
-  handLabOpen = typeof force === 'boolean' ? force : !handLabOpen;
-  document.body.classList.toggle('hand-lab-open', handLabOpen);
-  $('hand-lab-readout').hidden = !handLabOpen;
-  for (const id of ['btn-hand-lab', 'btn-hand-lab-footer']) {
-    const button = $(id);
-    if (button) button.setAttribute('aria-pressed', handLabOpen ? 'true' : 'false');
+// The camera preview shows the tracked 21-point skeleton per hand whenever the
+// camera is active, plus one compact status line: landmark count, tracking /
+// calibration state, and the latest backend webcam-control grade.
+function renderHandOverlay() {
+  const overlay = $('hand-overlay');
+  if (!overlay) return;
+  const cam = input.cameraState;
+  if (!cam.active) {
+    renderCamStatus(cam, 0);
+    return;
   }
-  if (handLabOpen && !input.cameraState.active) input.startCamera();
-}
-
-function renderHandLab() {
-  const overlay = $('hand-lab-canvas');
-  if (!overlay || !handLabOpen) return;
   const rect = overlay.getBoundingClientRect();
   const scale = Math.max(1, Math.min(2, devicePixelRatio || 1));
   const width = Math.max(1, Math.round(rect.width * scale));
@@ -163,7 +163,7 @@ function renderHandLab() {
   const ctx = overlay.getContext('2d');
   ctx.clearRect(0, 0, width, height);
   ctx.lineCap = 'round';
-  const hands = input.cameraState.debugHands || {};
+  const hands = cam.debugHands || {};
   let total = 0;
   for (const [side, color] of [['left', '#67e8f9'], ['right', '#fb923c']]) {
     const data = hands[side];
@@ -180,7 +180,7 @@ function renderHandLab() {
       ctx.stroke();
     }
     data.points.forEach((p, index) => {
-      const tip = [4,8,12,16,20].includes(index);
+      const tip = FINGERTIPS.has(index);
       ctx.beginPath();
       ctx.fillStyle = tip ? '#ffffff' : color;
       ctx.arc(p.x * width, p.y * height, (tip ? 4.2 : 2.5) * scale, 0, Math.PI * 2);
@@ -188,18 +188,30 @@ function renderHandLab() {
     });
   }
   ctx.shadowBlur = 0;
-  $('hand-lab-count').textContent = `${total} / 42 landmarks`;
-  $('hand-lab-hands').innerHTML = ['left', 'right'].map((side) => {
-    const d = hands[side];
-    if (!d) return `<section class="hand-lab-hand"><header><span>${side} hand</span><i></i></header><div class="hand-lab-metric"><span>Waiting for hand</span><output>—</output></div></section>`;
-    const curls = [d.thumb, ...d.curls];
-    const bars = curls.map((v, i) => `<span><i style="--curl:${Math.round(v * 100)}%"></i><small>${['T','I','M','R','P'][i]}</small></span>`).join('');
-    return `<section class="hand-lab-hand tracked"><header><span>${side} hand</span><i></i></header>
-      <div class="hand-lab-metric"><span>Tracking confidence</span><output>${Math.round(d.confidence * 100)}%</output></div>
-      <div class="hand-lab-metric"><span>Pinch / whole-hand contact</span><output>${d.pinchClosed ? 'PINCHED' : 'OPEN'} · ${Math.round((d.contact || 0) * 100)}%</output></div>
-      <div class="hand-lab-metric"><span>Palm roll / pitch</span><output>${Math.round(d.roll * 57.3)}° / ${Math.round(d.pitch * 57.3)}°</output></div>
-      <div class="finger-bars" aria-label="Thumb index middle ring and pinky curl">${bars}</div></section>`;
-  }).join('');
+  renderCamStatus(cam, total);
+}
+
+function renderCamStatus(cam, landmarks) {
+  const node = $('cam-status');
+  if (!node) return;
+  const calibration = cam.active ? input.calibrationState() : null;
+  let state = 'idle';
+  let text = 'Camera off';
+  if (cam.status === 'error') {
+    state = 'error';
+    text = `Camera unavailable${cam.error ? ` — ${cam.error}` : ''}`;
+  } else if (cam.active) {
+    const calibrated = Boolean(calibration && calibration.ready);
+    state = calibrated ? 'ready' : landmarks > 0 ? 'tracking' : 'searching';
+    const detail = calibrated ? 'calibrated'
+      : landmarks > 0 ? `calibrating ${Math.round(calibration.progress * 100)}%`
+        : 'searching';
+    text = `${landmarks} / 42 landmarks · ${detail}`;
+    const grade = session.webcamGrade;
+    if (grade && Number.isFinite(grade.score)) text += ` · grade ${grade.score}/100${grade.passed ? ' ✓' : ''}`;
+  }
+  if (text !== camStatusText) { camStatusText = text; node.textContent = text; }
+  node.dataset.state = state;
 }
 
 function wrenchStateLine(state) {
@@ -454,10 +466,6 @@ function onInputStatus(status) {
   const cam = status.camera;
   const gloveFlowReady = cam.active && cam.calibrated && cam.handsSeen >= 2;
   $('cam-wrap').hidden = !cam.active;
-  const holdTag = cam.holding > 0 && cam.handsSeen === 0 ? ' · holding pose' : '';
-  $('cam-tag').textContent = cam.active
-    ? `CAM · ${cam.handsSeen} hand${cam.handsSeen === 1 ? '' : 's'}${holdTag}`
-    : cam.status === 'error' ? `CAM error: ${cam.error}` : 'CAM off';
   $('btn-camera').setAttribute('aria-pressed', cam.active ? 'true' : 'false');
   $('btn-camera').textContent = cam.active ? 'Camera: on' : 'Camera: off';
   const setupButton = $('btn-setup-camera');
@@ -704,6 +712,9 @@ async function evaluateAttempt(reason, force = false) {
   });
   const outcome = http.ok ? http.data.outcome : offline;
   const source = http.ok ? 'backend' : 'local-offline';
+  if (http.ok && http.data.evidence && http.data.evidence.webcam_tracking) {
+    session.webcamGrade = http.data.evidence.webcam_tracking;
+  }
   setLoopPhase('coach', outcome.coach, http.ok ? 'W&B · Weave live' : 'Local fallback');
 
   session.lastResponse = {
@@ -1263,7 +1274,7 @@ function frame(now) {
   lastFrame = now;
 
   input.update(dt);
-  renderHandLab();
+  renderHandOverlay();
   for (const side of ['left', 'right']) gloves[side].update(dt, input.hands[side].target);
   propsOut = props.update(sim, dt, gloves);
   interaction.update(dt, gloves, propsOut);
@@ -1363,8 +1374,6 @@ function wireUi() {
     }, 90);
   }, { passive: true });
   $('btn-camera').addEventListener('click', () => { input.toggleCamera(); });
-  $('btn-hand-lab').addEventListener('click', () => toggleHandLab());
-  $('btn-hand-lab-footer').addEventListener('click', () => toggleHandLab());
   $('btn-voice').addEventListener('click', () => { voice.setEnabled(!voice.enabled); });
   $('btn-retry').addEventListener('click', retryLesson);
   $('btn-drop').addEventListener('click', () => {

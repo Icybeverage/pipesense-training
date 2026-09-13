@@ -119,6 +119,15 @@ body {
 
 .cam[hidden] { display: none; }
 
+/* During calibration the real camera becomes the right-hand demonstration
+   surface; after the intro closes it returns to the compact HUD preview. */
+body:has(.intro:not([hidden])) .cam {
+  z-index: 26;
+  top: clamp(202px, 23vh, 238px);
+  right: max(7vw, calc((100vw - 1160px) / 2 + 48px));
+  width: min(38vw, 490px);
+}
+
 .cam video {
   display: block;
   width: 100%;
@@ -128,7 +137,7 @@ body {
   background: #05070c;
 }
 
-#hand-lab-canvas {
+#hand-overlay {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -137,55 +146,47 @@ body {
   pointer-events: none;
 }
 
-body.hand-lab-open .cam {
-  z-index: 30;
-  width: min(620px, calc(100vw - 28px));
-  border-color: rgba(103, 232, 249, 0.55);
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(103, 232, 249, 0.12);
-}
-
-.hand-lab-readout {
-  padding: 12px 14px 14px;
-  background: linear-gradient(180deg, rgba(10, 17, 28, 0.98), rgba(5, 9, 16, 0.99));
-}
-
-.hand-lab-readout[hidden] { display: none; }
-
-.hand-lab-readout header,
-.hand-lab-hand header,
-.hand-lab-metric { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-
-.hand-lab-readout header b { color: #eefaff; letter-spacing: .04em; }
-.hand-lab-readout header span { color: var(--accent); font: 600 .68rem/1.2 ui-monospace, SFMono-Regular, monospace; }
-.hand-lab-readout > p { margin: 10px 0 0; color: var(--ink-dim); font-size: .72rem; }
-.hand-lab-hands { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
-.hand-lab-hand { padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.025); }
-.hand-lab-hand header { margin-bottom: 7px; font-size: .72rem; text-transform: uppercase; letter-spacing: .12em; }
-.hand-lab-hand header i { width: 7px; height: 7px; border-radius: 50%; background: #4b5563; box-shadow: 0 0 0 3px rgba(75,85,99,.15); }
-.hand-lab-hand.tracked header i { background: #67e8f9; box-shadow: 0 0 10px rgba(103,232,249,.8); }
-.hand-lab-metric { margin-top: 4px; color: var(--ink-dim); font-size: .66rem; }
-.hand-lab-metric output { color: #e5f8ff; font: 600 .65rem/1.2 ui-monospace, SFMono-Regular, monospace; }
-.finger-bars { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; height: 34px; align-items: end; margin-top: 8px; }
-.finger-bars span { position: relative; height: 100%; overflow: hidden; border-radius: 3px; background: rgba(255,255,255,.07); }
-.finger-bars i { position: absolute; inset: auto 0 0; height: var(--curl); background: linear-gradient(#67e8f9, #138ba2); transition: height 80ms linear; }
-.finger-bars small { position: absolute; z-index: 1; inset: auto 0 2px; text-align: center; font-size: .48rem; color: white; }
-
-@media (max-width: 620px) {
-  body.hand-lab-open .cam { top: 62px; right: 14px; }
-  .hand-lab-hands { grid-template-columns: 1fr; }
-}
-
-.cam-tag {
-  position: absolute;
-  top: 6px;
-  left: 8px;
-  font-size: 0.58rem;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--accent);
+.cam-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 5px 9px;
+  border-top: 1px solid var(--line);
   background: rgba(5, 8, 14, 0.72);
-  padding: 2px 8px;
-  border-radius: 999px;
+  color: var(--ink-dim);
+  font: 500 0.6rem/1.35 var(--mono);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cam-status::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #59677b;
+  box-shadow: 0 0 0 3px rgba(89, 103, 123, 0.12);
+}
+
+.cam-status[data-state="searching"] { color: var(--warn); }
+.cam-status[data-state="searching"]::before { background: var(--warn); box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.14); animation: trackingPulse 1s infinite; }
+.cam-status[data-state="tracking"] { color: var(--accent); }
+.cam-status[data-state="tracking"]::before { background: var(--accent); box-shadow: 0 0 0 3px rgba(103, 232, 249, 0.14); }
+.cam-status[data-state="ready"] { color: var(--ok); }
+.cam-status[data-state="ready"]::before { background: var(--ok); box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.16); }
+.cam-status[data-state="error"] { color: #fb7185; }
+.cam-status[data-state="error"]::before { background: #fb7185; box-shadow: 0 0 0 3px rgba(251, 113, 133, 0.14); }
+
+@media (max-width: 760px) {
+  body:has(.intro:not([hidden])) .cam {
+    top: 76px;
+    right: 12px;
+    width: min(46vw, 260px);
+  }
 }
 
 /* Intro */
