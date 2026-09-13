@@ -52,7 +52,7 @@ session. Public event: <https://luma.com/coreweavehacks>.
   Maya's intervention, a retry, the sealed result, and the Weave trace.
 - [x] Provide the repository URL and working demo URL in the event submission
   form once the organizers expose or confirm that form.
-- [ ] Keep a silent backup recording or captioned path in case venue audio or
+- [x] Keep a silent backup recording or captioned path in case venue audio or
   network access fails.
 
 ## Demo story for judges
