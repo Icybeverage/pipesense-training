@@ -10,14 +10,14 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
-const PALM = { w: 0.086, t: 0.030, l: 0.095, front: 0.0925 };
+const PALM = { w: 0.095, t: 0.036, l: 0.112, front: 0.108 };
 const FINGERS = [
-  { key: 'index', x: 0.028, dz: 0.000, lens: [0.033, 0.026, 0.020], w: 0.017, curlMax: [1.35, 1.5, 0.8] },
-  { key: 'middle', x: 0.009, dz: 0.004, lens: [0.036, 0.028, 0.021], w: 0.018, curlMax: [1.3, 1.5, 0.8] },
-  { key: 'ring', x: -0.010, dz: 0.001, lens: [0.033, 0.026, 0.020], w: 0.0165, curlMax: [1.3, 1.5, 0.85] },
-  { key: 'pinky', x: -0.028, dz: -0.007, lens: [0.028, 0.021, 0.017], w: 0.0145, curlMax: [1.25, 1.45, 0.9] },
+  { key: 'index', x: 0.031, dz: 0.000, lens: [0.043, 0.029, 0.021], w: 0.0185, curlMax: [1.35, 1.5, 0.8] },
+  { key: 'middle', x: 0.010, dz: 0.005, lens: [0.047, 0.032, 0.022], w: 0.0195, curlMax: [1.3, 1.5, 0.8] },
+  { key: 'ring', x: -0.011, dz: 0.001, lens: [0.043, 0.029, 0.021], w: 0.018, curlMax: [1.3, 1.5, 0.85] },
+  { key: 'pinky', x: -0.033, dz: -0.008, lens: [0.035, 0.024, 0.018], w: 0.016, curlMax: [1.25, 1.45, 0.9] },
 ];
-const THUMB = { lens: [0.031, 0.025, 0.019], w: 0.021 };
+const THUMB = { lens: [0.036, 0.027, 0.020], w: 0.022 };
 
 const LEATHER_SURFACE = makeLeatherSurface();
 
@@ -148,12 +148,12 @@ export function createGlove(side) {
   const root = new THREE.Group();
   root.name = `glove-${side}`;
 
-  const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.053, 0.047, 0.145, 20, 1, true), mats.cuff);
+  const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.045, 0.082, 20, 1, true), mats.cuff);
   cuff.rotation.x = Math.PI / 2;
-  cuff.position.set(0, -0.004, -0.094);
+  cuff.position.set(0, -0.004, -0.058);
   root.add(cuff);
   const cuffRing = new THREE.Mesh(new THREE.TorusGeometry(0.049, 0.0046, 12, 26), mats.cuff);
-  cuffRing.position.set(0, -0.004, -0.028);
+  cuffRing.position.set(0, -0.004, -0.018);
   root.add(cuffRing);
 
   const palm = new THREE.Mesh(new RoundedBoxGeometry(PALM.w, PALM.t, PALM.l, 3, 0.009), mats.leatherPalm);
@@ -235,7 +235,7 @@ export function createGlove(side) {
   }
 
   const thumbBase = new THREE.Group();
-  thumbBase.position.set(0.035 * s, -0.008, 0.032);
+  thumbBase.position.set(0.040 * s, -0.010, 0.038);
   root.add(thumbBase);
   const thumbJoints = [thumbBase];
   {
