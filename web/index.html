@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>PipeSense — Build a P-Trap</title>
+  <meta name="description" content="First-person virtual P-trap assembly for workforce training. Virtual work gloves, real plumbing procedure, deterministic geometry scoring and adaptive voice coaching." />
+  <meta name="theme-color" content="#05080e" />
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="style.css" />
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <canvas id="scene" tabindex="0"
+    aria-label="First-person workshop view under a sink: sink tailpiece above, wall drain arm behind, P-trap and slip nuts on the bench, two virtual work gloves in the foreground."></canvas>
+
+  <header class="brand" aria-hidden="false">
+    <h1>Pipe<span>Sense</span></h1>
+    <p>Build a P-Trap · virtual simulation</p>
+  </header>
+
+  <div class="cam" id="cam-wrap" hidden>
+    <video id="cam-video" autoplay playsinline muted></video>
+    <span class="cam-tag" id="cam-tag">CAM off</span>
+  </div>
+
+  <section class="intro" id="intro" aria-label="Lesson setup">
+    <div class="flow-shell">
+      <header class="flow-head">
+        <div>
+          <p class="eyebrow">Professional skills simulation</p>
+          <h2>Build a P-Trap</h2>
+        </div>
+        <div class="flow-progress" aria-label="Setup progress"><i class="active"></i><i></i><i></i></div>
+      </header>
+
+      <section class="flow-stage active" id="stage-setup" aria-labelledby="setup-title">
+        <div class="stage-copy">
+          <span class="stage-kicker">01 · Calibrate</span>
+          <h3 id="setup-title">Put your hands in the workspace</h3>
+          <p>Use your camera for natural hand and finger control. Hold both hands at chest height, then pinch your thumb and index finger once.</p>
+          <div class="tracking-readout" id="tracking-readout" data-state="idle">
+            <span class="tracking-dot"></span>
+            <div><strong id="tracking-title">Camera not connected</strong><small id="tracking-detail">The gloves remain available with mouse controls.</small></div>
+          </div>
+          <div class="stage-actions">
+            <button class="btn primary" id="btn-setup-camera" type="button">Enable hand tracking</button>
+            <button class="btn" id="btn-tour" type="button">Continue to tutorial</button>
+          </div>
+        </div>
+        <div class="calibration-visual" aria-hidden="true">
+          <div class="scan-frame"><span></span><span></span><span></span><span></span></div>
+          <div class="hand-readout left"><b>LEFT</b><em>21 joints</em></div>
+          <div class="hand-readout right"><b>RIGHT</b><em>21 joints</em></div>
+          <div class="scan-line"></div>
+          <p>Raise hands · palms facing camera</p>
+        </div>
+      </section>
+
+      <section class="flow-stage" id="stage-tutorial" hidden aria-labelledby="tutorial-title">
+        <div class="tutorial-heading">
+          <div><span class="stage-kicker">02 · Visual walkthrough</span><h3 id="tutorial-title">Learn the sequence</h3></div>
+          <p>Scroll the procedure cards. The active card will follow you into the simulation.</p>
+        </div>
+        <div class="tutorial-deck" id="tutorial-deck" tabindex="0" aria-label="P-trap procedure cards">
+          <article class="tutorial-card" data-step="1">
+            <div class="card-top"><span>STEP 01</span><b>ISOLATE</b></div>
+            <svg viewBox="0 0 260 150" role="img" aria-label="Turn the shutoff valve clockwise"><path d="M130 34v82M96 58h68M104 48l52 20M104 68l52-20"/><circle cx="130" cy="58" r="31"/><path class="motion" d="M82 106c28 28 68 30 98 4"/><path class="arrow" d="m171 99 12 11-15 7"/></svg>
+            <h4>Close the supply valve</h4><p>Pinch the red handle and rotate until it stops. Never work on a live line.</p>
+            <footer><span>Gesture</span><strong>Pinch + rotate</strong></footer>
+          </article>
+          <article class="tutorial-card" data-step="2">
+            <div class="card-top"><span>STEP 02</span><b>ALIGN</b></div>
+            <svg viewBox="0 0 260 150" role="img" aria-label="Lift the P-trap into both pipe sockets"><path d="M75 30v40M185 30v40M75 70c0 64 110 64 110 0"/><path class="motion" d="M130 128V92"/><path class="arrow" d="m120 102 10-12 10 12"/><circle cx="75" cy="68" r="13"/><circle cx="185" cy="68" r="13"/></svg>
+            <h4>Seat both sockets</h4><p>Lift the trap level. Center the tailpiece and wall arm before you release.</p>
+            <footer><span>Gesture</span><strong>Pinch + lift</strong></footer>
+          </article>
+          <article class="tutorial-card" data-step="3">
+            <div class="card-top"><span>STEP 03</span><b>SECURE</b></div>
+            <svg viewBox="0 0 260 150" role="img" aria-label="Tighten the first slip nut with a wrench"><path d="M72 32v86M188 32v86M72 82c0 48 116 48 116 0"/><circle cx="72" cy="70" r="17"/><path d="m53 116 57-47 15 17-58 47z"/><path class="motion" d="M115 52c24 8 37 29 33 50"/></svg>
+            <h4>Tighten the tail nut</h4><p>Pick up the adjustable wrench, seat its jaw, and turn until the joint clicks tight.</p>
+            <footer><span>Tool</span><strong>Adjustable wrench</strong></footer>
+          </article>
+          <article class="tutorial-card" data-step="4">
+            <div class="card-top"><span>STEP 04</span><b>SECURE</b></div>
+            <svg viewBox="0 0 260 150" role="img" aria-label="Tighten the wall slip nut with a wrench"><path d="M62 30v92M62 82c0 48 122 48 122 0V54h35"/><circle cx="184" cy="67" r="17"/><path d="m146 125 42-58 18 13-43 58z"/><path class="motion" d="M203 43c19 13 26 34 18 54"/></svg>
+            <h4>Tighten the wall nut</h4><p>Keep the trap level while you secure the wall-side connection.</p>
+            <footer><span>Check</span><strong>Both joints tight</strong></footer>
+          </article>
+          <article class="tutorial-card" data-step="5">
+            <div class="card-top"><span>STEP 05</span><b>VERIFY</b></div>
+            <svg viewBox="0 0 260 150" role="img" aria-label="Run water and verify the trap seal"><path d="M67 28h80c34 0 34 35 34 35"/><path d="M181 63c-12 19-12 28 0 40 12-12 12-21 0-40z"/><path d="M70 95c0 45 120 45 120 0"/><path class="motion" d="M212 72v46"/><path class="arrow" d="m203 108 9 12 9-12"/></svg>
+            <h4>Run water and inspect</h4><p>Open the faucet. The trap must retain water with no leak at either joint.</p>
+            <footer><span>Pass</span><strong>Seal holds</strong></footer>
+          </article>
+        </div>
+        <div class="deck-controls">
+          <button class="btn ghost" id="btn-tour-back" type="button">Back</button>
+          <span id="deck-position">1 / 5</span>
+          <button class="btn" id="btn-tour-prev" type="button">Previous</button>
+          <button class="btn" id="btn-tour-next" type="button">Next step</button>
+          <button class="btn primary" id="btn-go" type="button" hidden>Start simulation</button>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  <section class="hud" aria-label="Coaching">
+    <p class="caption" id="caption" role="status" aria-live="polite" aria-atomic="true">Close the supply valve to isolate the drain line.</p>
+    <p class="attrib" id="attrib"></p>
+    <p class="strategy-chip" id="strategy-chip" hidden></p>
+  </section>
+
+  <section class="panel steps" id="steps" hidden aria-label="Step checklist">
+    <h3>Procedure</h3>
+    <ol id="steps-list"></ol>
+  </section>
+
+  <section class="panel align" id="align" hidden aria-label="Socket alignment readout">
+    <h3>Socket alignment — live</h3>
+    <div id="align-rows"></div>
+    <p class="align-note" id="align-note"></p>
+  </section>
+
+  <section class="practice-card" id="practice-card" hidden aria-live="polite">
+    <div class="practice-card-top"><span id="practice-count">STEP 01 / 05</span><b id="practice-status">IN PROGRESS</b></div>
+    <h3 id="practice-title">Close the supply valve</h3>
+    <p id="practice-hint">Pinch the red handle and rotate until it stops.</p>
+    <div class="practice-progress"><i id="practice-progress"></i></div>
+  </section>
+
+  <section class="loop-card" id="loop-card" hidden aria-label="Adaptive training loop">
+    <header><span>Learning loop</span><b id="loop-source">W&amp;B ready</b></header>
+    <div class="loop-track" aria-label="Observe coach adapt retry evaluate">
+      <span data-loop="observe">Observe</span><i></i><span data-loop="coach">Coach</span><i></i><span data-loop="adapt">Adapt</span><i></i><span data-loop="retry">Retry</span><i></i><span data-loop="evaluate">Evaluate</span>
+    </div>
+    <p id="loop-message">Your first attempt becomes the baseline.</p>
+  </section>
+
+  <footer class="controls" id="controls">
+    <button class="btn" id="btn-camera" type="button" aria-pressed="false">Camera: off</button>
+    <button class="btn" id="btn-voice" type="button" aria-pressed="true">Maya: on</button>
+    <button class="btn" id="btn-guide" type="button">Procedure</button>
+    <button class="btn" id="btn-retry" type="button">Retry</button>
+    <button class="btn" id="btn-drop" type="button">Release hands</button>
+    <details class="more"><summary class="btn ghost">More</summary><div class="more-menu">
+      <label class="cmd-wrap"><span class="sr-only">Command</span><input class="cmd" id="cmd" type="text" autocomplete="off" spellcheck="false" placeholder="Demo command…" /></label>
+      <button class="btn ghost" id="btn-judge" type="button" aria-expanded="false" aria-controls="judge">Judge evidence</button>
+    </div></details>
+  </footer>
+
+  <div class="toast" id="toast" role="status" hidden></div>
+
+  <aside class="judge" id="judge" hidden aria-label="Judge evidence view">
+    <header class="judge-head">
+      <h2>Judge view — evidence only</h2>
+      <button class="btn ghost" id="btn-judge-close" type="button">Close</button>
+    </header>
+    <p class="judge-note">Everything below is either raw browser state, the exact request body, or the backend response. Anything the backend did not return is labelled local fallback. Configured endpoints are not claimed as live.</p>
+
+    <section class="judge-sec">
+      <h3>Connection &amp; status</h3>
+      <div class="judge-actions">
+        <button class="btn ghost" id="btn-health" type="button">Probe GET /health</button>
+        <button class="btn ghost" id="btn-live" type="button">Connect live agent</button>
+      </div>
+      <pre id="judge-conn">No health probe yet.</pre>
+    </section>
+
+    <section class="judge-sec">
+      <h3>Last request — POST /v1/attempts/evaluate</h3>
+      <pre id="judge-req">No evaluation request yet.</pre>
+    </section>
+
+    <section class="judge-sec">
+      <h3>Last response — backend or local fallback</h3>
+      <pre id="judge-res">No evaluation response yet.</pre>
+    </section>
+
+    <section class="judge-sec">
+      <h3>Attempt history — deterministic score, strategy, verdict</h3>
+      <div class="judge-body" id="judge-attempts">No attempts yet.</div>
+    </section>
+
+    <section class="judge-sec">
+      <h3>Live geometry checks — computed in this browser</h3>
+      <pre id="judge-geom"></pre>
+    </section>
+  </aside>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

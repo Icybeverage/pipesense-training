@@ -1,0 +1,6 @@
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30,<1
+weave>=0.52,<1
+wandb>=0.21,<1
+marimo>=0.9,<1
+pandas>=2.2,<3

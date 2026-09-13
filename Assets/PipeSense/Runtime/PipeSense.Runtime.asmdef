@@ -1,0 +1,6 @@
+{
+  "name": "PipeSense.Runtime",
+  "rootNamespace": "PipeSense",
+  "references": ["UnityEngine.UI", "Unity.InputSystem"],
+  "autoReferenced": true
+}

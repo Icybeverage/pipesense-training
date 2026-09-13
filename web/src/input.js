@@ -1,0 +1,642 @@
+// PipeSense input layer.
+//
+// Two sources feed the same interface: every hand exposes a smoothed pose
+// (world target, orientation, finger curls, thumb, pinch) that gloves.js
+// renders and interaction.js consumes. Camera input uses MediaPipe's Hand
+// Landmarker (21 landmarks per hand); pointer and keyboard reproduce the same
+// pose so the demo is fully playable with no camera.
+//
+// Handedness: the camera frame is NOT mirrored, so MediaPipe's "mirrored
+// input" assumption is inverted here - the label is swapped before use. World
+// X is mirrored from image X, which matches what the learner sees.
+
+import { GEOM } from './sim.js';
+
+export const TASKS_VISION_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+const HAND_MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
+
+const CONF = {
+  handMin: 0.55,
+  presenceMin: 0.4,
+  staleMs: 320,
+  lostHintMs: 1600,
+  jumpLimit: 0.22,
+};
+
+const PINCH = { close: 0.42, open: 0.62 };
+const IMG = { xScale: 1.4, yTop: 1.42, yScale: 1.35, zBase: 0.10, zGain: 2.6 };
+
+const WORK = GEOM.workspace;
+const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
+const clamp01 = (v) => clamp(v, 0, 1);
+
+// One Euro filter: low lag while still, stronger smoothing when moving fast.
+class OneEuro {
+  constructor(value, { minCut = 1.6, beta = 0.05, dCut = 1.0 } = {}) {
+    this.minCut = minCut;
+    this.beta = beta;
+    this.dCut = dCut;
+    this.x = value;
+    this.dx = 0;
+    this.t = null;
+  }
+
+  static alpha(cut, dt) {
+    const tau = 1 / (2 * Math.PI * cut);
+    return 1 / (1 + tau / dt);
+  }
+
+  filter(value, dt) {
+    if (this.t === null || dt <= 0) {
+      this.t = 0;
+      this.x = value;
+      return value;
+    }
+    const dRaw = (value - this.x) / dt;
+    const aD = OneEuro.alpha(this.dCut, dt);
+    this.dx = aD * dRaw + (1 - aD) * this.dx;
+    const cut = this.minCut + this.beta * Math.abs(this.dx);
+    const a = OneEuro.alpha(cut, dt);
+    this.x = a * value + (1 - a) * this.x;
+    return this.x;
+  }
+}
+
+function angleAt(a, b, c) {
+  const abx = a.x - b.x; const aby = a.y - b.y; const abz = (a.z || 0) - (b.z || 0);
+  const cbx = c.x - b.x; const cby = c.y - b.y; const cbz = (c.z || 0) - (b.z || 0);
+  const dot = abx * cbx + aby * cby + abz * cbz;
+  const magA = Math.hypot(abx, aby, abz) || 1e-6;
+  const magC = Math.hypot(cbx, cby, cbz) || 1e-6;
+  return Math.acos(clamp(dot / (magA * magC), -1, 1));
+}
+
+function bendOf(pts, i0, i1, i2) {
+  return Math.PI - angleAt(pts[i0], pts[i1], pts[i2]);
+}
+
+const FINGER_TRIPLETS = [
+  [[0, 5, 6], [5, 6, 7], [6, 7, 8]],
+  [[0, 9, 10], [9, 10, 11], [10, 11, 12]],
+  [[0, 13, 14], [13, 14, 15], [14, 15, 16]],
+  [[0, 17, 18], [17, 18, 19], [18, 19, 20]],
+];
+const CURL_WEIGHTS = [0.3, 0.45, 0.25];
+const CURL_FULL = 1.55;
+
+function createHandState(side) {
+  return {
+    side,
+    source: 'idle',
+    target: {
+      pos: { x: side === 'left' ? -0.24 : 0.24, y: 0.52, z: 0.5 },
+      yaw: Math.PI, pitch: -0.18, roll: 0,
+      curls: [0.25, 0.25, 0.25, 0.25], thumb: 0.2, pinch: 0, highlight: 0,
+      joints: null,
+    },
+    pinchClosed: false,
+    pinchRaw: 0,
+    rotDelta: 0,
+    raf: { x: null, y: null, z: null },
+    filters: null,
+    lastSeen: 0,
+    tracked: false,
+    lastPalm: null,
+  };
+}
+
+function hydrateFilters(hand) {
+  if (hand.filters) return;
+  hand.filters = {
+    x: new OneEuro(hand.target.pos.x),
+    y: new OneEuro(hand.target.pos.y),
+    z: new OneEuro(hand.target.pos.z, { minCut: 1.1, beta: 0.03 }),
+    yaw: new OneEuro(hand.target.yaw, { minCut: 1.2, beta: 0.02 }),
+    pitch: new OneEuro(hand.target.pitch, { minCut: 1.2, beta: 0.02 }),
+    roll: new OneEuro(hand.target.roll, { minCut: 1.0, beta: 0.02 }),
+    scale: new OneEuro(0.13, { minCut: 0.9, beta: 0.02 }),
+    curls: [0, 1, 2, 3].map(() => new OneEuro(0.25, { minCut: 2.2, beta: 0.04 })),
+    thumb: new OneEuro(0.2, { minCut: 2.2, beta: 0.04 }),
+    pinch: new OneEuro(1.0, { minCut: 2.6, beta: 0.02 }),
+  };
+}
+
+function landmarkPose(points) {
+  const aspect = 16 / 9;
+  const palmIdx = [0, 5, 9, 13, 17];
+  let px = 0; let py = 0;
+  for (const i of palmIdx) { px += points[i].x; py += points[i].y; }
+  px /= palmIdx.length;
+  py /= palmIdx.length;
+
+  const wrist = points[0];
+  const midMcp = points[9];
+  const scale = Math.hypot((midMcp.x - wrist.x) * aspect, midMcp.y - wrist.y) || 1e-4;
+
+  const fx = (midMcp.x - wrist.x) * aspect;
+  const fy = midMcp.y - wrist.y;
+  const fLen = Math.hypot(fx, fy) || 1e-4;
+  const dirX = -fx / fLen;
+  const dirY = -fy / fLen;
+  const world = { x: dirX, y: dirY, z: -0.8 };
+  const wLen = Math.hypot(world.x, world.y, world.z) || 1;
+  const yaw = Math.atan2(world.x / wLen, world.z / wLen);
+  const pitch = -Math.asin(clamp(world.y / wLen, -1, 1));
+
+  const rx = (points[17].x - points[5].x) * aspect;
+  const ry = points[17].y - points[5].y;
+  const roll = clamp(-Math.atan2(-ry, rx) * 0.5, -0.6, 0.6);
+
+  const curls = FINGER_TRIPLETS.map((joints) => {
+    let bend = 0;
+    joints.forEach(([a, b, c], i) => { bend += bendOf(points, a, b, c) * CURL_WEIGHTS[i]; });
+    return clamp01(bend / CURL_FULL);
+  });
+  const joints = FINGER_TRIPLETS.map((triplets) => triplets.map(([a, b, c]) => clamp01(bendOf(points, a, b, c) / CURL_FULL)));
+  const thumb = clamp01((bendOf(points, 0, 1, 2) * 0.35 + bendOf(points, 1, 2, 3) * 0.4 + bendOf(points, 2, 3, 4) * 0.25) / CURL_FULL);
+
+  const pinchRatio = Math.hypot((points[4].x - points[8].x) * aspect, points[4].y - points[8].y) / scale;
+
+  return {
+    palm: { x: px, y: py },
+    inRange: px > 0.04 && px < 0.96 && py > 0.02 && py < 0.96,
+    scale,
+    yaw,
+    pitch,
+    roll,
+    curls,
+    joints,
+    thumb,
+    pinchRatio,
+    smooth: (dt, hand) => {
+      const f = hand.filters;
+      const wx = clamp((0.5 - px) * IMG.xScale, WORK.minX, WORK.maxX);
+      const wy = clamp(IMG.yTop - py * IMG.yScale, WORK.minY, WORK.maxY);
+      const zs = f.scale.filter(scale, dt);
+      const wz = clamp(IMG.zBase + (zs - 0.05) * IMG.zGain, WORK.minZ, WORK.maxZ);
+      return {
+        x: f.x.filter(wx, dt),
+        y: f.y.filter(wy, dt),
+        z: wz,
+        yaw: f.yaw.filter(yaw, dt),
+        pitch: f.pitch.filter(pitch, dt),
+        roll: f.roll.filter(roll, dt),
+        curls: curls.map((c, i) => f.curls[i].filter(c, dt)),
+        joints,
+        thumb: f.thumb.filter(thumb, dt),
+        pinchRatio: f.pinch.filter(pinchRatio, dt),
+      };
+    },
+  };
+}
+
+export function createInput({ canvas, video, onStatus }) {
+  const hands = { left: createHandState('left'), right: createHandState('right') };
+  const keys = new Set();
+  const drags = new Map();
+  const dragOffsets = new Map();
+  let wheelDelta = 0;
+  let cameraFrames = 0;
+  let fallbackFrames = 0;
+  let lastReportedHands = -1;
+
+  const camera = {
+    active: false,
+    status: 'off',
+    stream: null,
+    landmarker: null,
+    lastVideoTime: -1,
+    errors: 0,
+    handsSeen: 0,
+    lostSince: 0,
+    tmp: { x: 0, y: 0, z: 0 },
+  };
+
+  function status() {
+    if (onStatus) {
+      onStatus({
+        camera: { active: camera.active, status: camera.status, handsSeen: camera.handsSeen, error: camera.error || null },
+        inputMode: inputMode(),
+      });
+    }
+  }
+
+  function inputMode() {
+    if (!camera.active || cameraFrames === 0) return 'keyboard_mouse';
+    if (fallbackFrames === 0) return 'camera';
+    const ratio = cameraFrames / (cameraFrames + fallbackFrames);
+    if (ratio > 0.7) return 'camera';
+    if (ratio < 0.25) return 'keyboard_mouse';
+    return 'mixed';
+  }
+
+  // ------------------------------------------------------ pointer fallback
+  function toWorldFromPointer(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    const nx = (clientX - rect.left) / rect.width;
+    const ny = (clientY - rect.top) / rect.height;
+    return {
+      x: clamp((0.5 - nx) * IMG.xScale * 1.15, WORK.minX, WORK.maxX),
+      y: clamp(IMG.yTop - ny * IMG.yScale * 1.05, WORK.minY, WORK.maxY),
+      z: null,
+    };
+  }
+
+  function pickHand(point) {
+    let best = null; let bestDist = 0.42;
+    for (const side of ['left', 'right']) {
+      const t = hands[side].target.pos;
+      const d = Math.hypot(t.x - point.x, t.y - point.y);
+      if (d < bestDist) { bestDist = d; best = hands[side]; }
+    }
+    return best || (point.x < 0 ? hands.left : hands.right);
+  }
+
+  function onPointerDown(event) {
+    if (event.button !== 0 && event.button !== 1) return;
+    const p = toWorldFromPointer(event.clientX, event.clientY);
+    const hand = pickHand(p);
+    canvas.setPointerCapture(event.pointerId);
+    drags.set(event.pointerId, hand.side);
+    dragOffsets.set(event.pointerId, { dx: hand.target.pos.x - p.x, dy: hand.target.pos.y - p.y });
+    hand.grabIntent = !event.altKey;
+  }
+
+  function onPointerMove(event) {
+    const side = drags.get(event.pointerId);
+    if (!side) return;
+    const hand = hands[side];
+    const p = toWorldFromPointer(event.clientX, event.clientY);
+    const off = dragOffsets.get(event.pointerId) || { dx: 0, dy: 0 };
+    hand.target.pos.x = clamp(p.x + off.dx, WORK.minX, WORK.maxX);
+    hand.target.pos.y = clamp(p.y + off.dy, WORK.minY, WORK.maxY);
+  }
+
+  function onPointerUp(event) {
+    if (!drags.has(event.pointerId)) return;
+    const side = drags.get(event.pointerId);
+    drags.delete(event.pointerId);
+    dragOffsets.delete(event.pointerId);
+    if (side) hands[side].grabIntent = false;
+  }
+
+  function onWheel(event) {
+    wheelDelta += event.deltaY;
+    event.preventDefault();
+  }
+
+  function onKeyDown(event) {
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    const target = event.target;
+    if (target instanceof HTMLElement && target.closest('input, textarea, select')) return;
+    if (target instanceof HTMLElement && target.closest('button') && (event.code === 'Space' || event.key === 'Enter')) return;
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(event.code)) event.preventDefault();
+    keys.add(event.code);
+    if (event.code === 'BracketLeft' || event.code === 'BracketRight') {
+      const amt = event.code === 'BracketRight' ? 1 : -1;
+      if (keys.has('KeyF')) hands.left.rotDelta += amt * 0.09;
+      if (keys.has('Semicolon')) hands.right.rotDelta += amt * 0.09;
+      event.preventDefault();
+    }
+  }
+
+  function onKeyUp(event) {
+    keys.delete(event.code);
+  }
+
+  function applyFallback(dt) {
+    const fine = keys.has('ShiftLeft') || keys.has('ShiftRight');
+    const speed = fine ? 0.16 : 0.42;
+    const L = hands.left;
+    const R = hands.right;
+    const moveX = (k1, k2) => ((keys.has(k2) ? 1 : 0) - (keys.has(k1) ? 1 : 0));
+    const steps = [
+      [L, moveX('KeyA', 'KeyD'), moveX('KeyW', 'KeyS'), moveX('KeyQ', 'KeyE')],
+      [R, moveX('KeyJ', 'KeyL'), moveX('KeyI', 'KeyK'), moveX('KeyU', 'KeyO')],
+    ];
+    for (const [hand, mx, my, mz] of steps) {
+      let touched = false;
+      if (mx || my || mz) {
+        const norm = Math.hypot(mx, my, mz) || 1;
+        hand.target.pos.x = clamp(hand.target.pos.x + (mx / norm) * speed * dt, WORK.minX, WORK.maxX);
+        hand.target.pos.y = clamp(hand.target.pos.y + (my / norm) * speed * dt, WORK.minY, WORK.maxY);
+        hand.target.pos.z = clamp(hand.target.pos.z + (mz / norm) * speed * dt, WORK.minZ, WORK.maxZ);
+        touched = true;
+      }
+      if (drags.size > 0 || touched || keys.size > 0) hand.source = 'fallback';
+      if (drags.size > 0 || touched || keys.size > 0) hand.target.joints = null;
+    }
+    if (wheelDelta !== 0) {
+      const amt = clamp(wheelDelta * 0.0016, -0.35, 0.35);
+      let anyGrabbed = false;
+      for (const side of drags.values()) {
+        if (hands[side].grabIntent) {
+          hands[side].rotDelta += amt;
+          anyGrabbed = true;
+        }
+      }
+      if (!anyGrabbed) {
+        const side = keys.has('KeyF') ? 'left' : keys.has('Semicolon') ? 'right' : null;
+        if (side) hands[side].rotDelta += amt;
+      }
+      wheelDelta = 0;
+    }
+    for (const side of ['left', 'right']) {
+      const hand = hands[side];
+      if (hand.forced) continue;
+      const dragging = [...drags.values()].includes(side);
+      const keyDown = side === 'left' ? keys.has('KeyF') : keys.has('Semicolon');
+      const want = (dragging && hand.grabIntent) || keyDown;
+      setPinch(hand, want ? 1 : 0);
+      hand.target.curls = hand.target.curls.map((c) => c + ((want ? 0.85 : 0.3) - c) * Math.min(1, dt * 8));
+      hand.target.thumb += ((want ? 0.75 : 0.25) - hand.target.thumb) * Math.min(1, dt * 8);
+    }
+  }
+
+  function setPinch(hand, want) {
+    if (want >= 1) hand.pinchRaw = Math.min(1, hand.pinchRaw + 0.2);
+    else hand.pinchRaw = Math.max(0, hand.pinchRaw - 0.12);
+    hand.target.pinch = hand.pinchRaw;
+    hand.pinchClosed = hand.pinchRaw > 0.55;
+  }
+
+  // -------------------------------------------------------- camera input
+  async function ensureLandmarker() {
+    if (camera.landmarker) return camera.landmarker;
+    const vision = await import(/* @vite-ignore */ TASKS_VISION_URL);
+    const fileset = await vision.FilesetResolver.forVisionTasks(`${TASKS_VISION_URL}/wasm`);
+    const options = {
+      baseOptions: { modelAssetPath: HAND_MODEL_URL, delegate: 'GPU' },
+      runningMode: 'VIDEO',
+      numHands: 2,
+      minHandDetectionConfidence: 0.5,
+      minHandPresenceConfidence: 0.5,
+      minTrackingConfidence: 0.5,
+    };
+    try {
+      camera.landmarker = await vision.HandLandmarker.createFromOptions(fileset, options);
+    } catch (gpuError) {
+      options.baseOptions.delegate = 'CPU';
+      camera.landmarker = await vision.HandLandmarker.createFromOptions(fileset, options);
+    }
+    return camera.landmarker;
+  }
+
+  async function startCamera() {
+    if (camera.active || camera.status === 'starting') return;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      camera.status = 'unavailable';
+      camera.error = 'getUserMedia unavailable';
+      status();
+      return;
+    }
+    camera.status = 'starting';
+    camera.error = null;
+    status();
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      });
+      camera.stream = stream;
+      video.srcObject = stream;
+      await video.play();
+      await ensureLandmarker();
+      camera.active = true;
+      camera.status = 'running';
+      camera.errors = 0;
+      camera.lastVideoTime = -1;
+      camera.lostSince = 0;
+    } catch (err) {
+      const reason = err && err.name === 'NotAllowedError' ? 'permission denied'
+        : err && err.name === 'NotFoundError' ? 'no camera found'
+          : String((err && err.message) || err);
+      camera.status = 'error';
+      camera.error = reason;
+      stopTracks();
+    }
+    status();
+  }
+
+  function stopTracks() {
+    if (camera.stream) {
+      for (const track of camera.stream.getTracks()) track.stop();
+      camera.stream = null;
+    }
+    if (video) video.srcObject = null;
+  }
+
+  function stopCamera() {
+    stopTracks();
+    camera.active = false;
+    camera.status = 'off';
+    camera.handsSeen = 0;
+    for (const side of ['left', 'right']) {
+      hands[side].tracked = false;
+      hands[side].target.joints = null;
+    }
+    status();
+  }
+
+  async function toggleCamera() {
+    if (camera.active) stopCamera();
+    else await startCamera();
+  }
+
+  // Camera frame is raw (not mirrored), so MediaPipe's handedness label is
+  // inverted relative to the learner; return the corrected label.
+  function correctedLabel(categoryName) {
+    const label = String(categoryName || '').toLowerCase();
+    if (label === 'left') return 'right';
+    if (label === 'right') return 'left';
+    return '';
+  }
+
+  function selectDetections(result) {
+    const out = [];
+    const landmarks = result.landmarks || [];
+    const handedness = result.handednesses || result.handedness || [];
+    for (let i = 0; i < landmarks.length; i++) {
+      const points = landmarks[i];
+      if (!points || points.length !== 21) continue;
+      const category = handedness[i] && handedness[i][0];
+      const score = category ? category.score : 0;
+      if (score < CONF.handMin) continue;
+      const presence = points.reduce((sum, p) => sum + (p.presence ?? p.visibility ?? 1), 0) / points.length;
+      if (presence < CONF.presenceMin) continue;
+      out.push({
+        label: correctedLabel(category && category.categoryName),
+        score,
+        points,
+        x: points[9].x,
+      });
+    }
+    return out;
+  }
+
+  function applyCameraFrame(dt) {
+    if (!camera.landmarker || !camera.active) return false;
+    if (video.readyState < 2) return false;
+    if (video.currentTime === camera.lastVideoTime) return false;
+    camera.lastVideoTime = video.currentTime;
+    let result;
+    try {
+      result = camera.landmarker.detectForVideo(video, performance.now());
+      camera.errors = 0;
+    } catch (err) {
+      camera.errors += 1;
+      if (camera.errors > 6) {
+        camera.status = 'error';
+        camera.error = 'tracking failed repeatedly';
+        stopCamera();
+      }
+      return false;
+    }
+    const detections = selectDetections(result);
+    camera.handsSeen = detections.length;
+    if (camera.handsSeen !== lastReportedHands) {
+      lastReportedHands = camera.handsSeen;
+      status();
+    }
+
+    const assigned = { left: null, right: null };
+    const leftovers = [];
+    for (const det of detections) {
+      if ((det.label === 'left' || det.label === 'right') && !assigned[det.label]) assigned[det.label] = det;
+      else leftovers.push(det);
+    }
+    for (const det of leftovers) {
+      // Raw frame: a hand on image-left is the learner's right hand.
+      const prefer = det.x < 0.5 ? 'right' : 'left';
+      const slot = !assigned[prefer] ? prefer : (!assigned.left ? 'left' : !assigned.right ? 'right' : null);
+      if (!slot) break;
+      assigned[slot] = det;
+    }
+
+    const now = performance.now();
+    for (const side of ['left', 'right']) {
+      const hand = hands[side];
+      const det = assigned[side];
+      if (!det) {
+        if (hand.tracked && now - hand.lastSeen > CONF.staleMs) hand.tracked = false;
+        continue;
+      }
+      hydrateFilters(hand);
+      const pose = landmarkPose(det.points);
+      if (!pose.inRange) continue;
+      if (hand.lastPalm) {
+        const jump = Math.hypot(pose.palm.x - hand.lastPalm.x, pose.palm.y - hand.lastPalm.y);
+        if (jump > CONF.jumpLimit && hand.tracked) continue;
+      }
+      hand.lastPalm = pose.palm;
+      const smooth = pose.smooth(dt, hand);
+      hand.target.pos.x = smooth.x;
+      hand.target.pos.y = smooth.y;
+      hand.target.pos.z = smooth.z;
+      hand.target.yaw = smooth.yaw;
+      hand.target.pitch = clamp(smooth.pitch, -0.7, 0.9);
+      hand.target.roll = smooth.roll;
+      hand.target.curls = smooth.curls.map((c) => clamp(c, 0, 1));
+      hand.target.joints = smooth.joints;
+      hand.target.thumb = clamp(smooth.thumb, 0, 1);
+
+      const ratio = smooth.pinchRatio;
+      if (!hand.forced) {
+        const wasClosed = hand.pinchClosed;
+        if (!wasClosed && ratio < PINCH.close) hand.pinchClosed = true;
+        else if (wasClosed && ratio > PINCH.open) hand.pinchClosed = false;
+        hand.pinchRaw = hand.pinchClosed ? 1 : clamp01(1 - (ratio - PINCH.close) / (PINCH.open - PINCH.close));
+        hand.target.pinch = hand.pinchRaw;
+      }
+      if (hand.pinchClosed && hand.roll !== undefined) {
+        // Wrist roll while pinched drives rotation (valve, faucet, wrench).
+        const delta = smooth.roll - (hand.prevRoll ?? smooth.roll);
+        if (Math.abs(delta) < 0.35) hand.rotDelta += delta * 1.6;
+      }
+      hand.prevRoll = smooth.roll;
+      hand.tracked = true;
+      hand.source = 'camera';
+      hand.lastSeen = now;
+    }
+    return detections.length > 0;
+  }
+
+  function update(dt) {
+    applyFallback(dt);
+    const anyCamera = applyCameraFrame(dt);
+    if (anyCamera) cameraFrames += 1;
+    else fallbackFrames += 1;
+
+    for (const side of ['left', 'right']) {
+      const hand = hands[side];
+      if (!hand.tracked) {
+        hand.source = hand.source === 'camera' ? 'fallback' : hand.source;
+      }
+    }
+
+    if (camera.active && camera.handsSeen === 0) {
+      const now = performance.now();
+      if (!camera.lostSince) camera.lostSince = now;
+    } else {
+      camera.lostSince = 0;
+    }
+  }
+
+  function consumeRot(side) {
+    const hand = hands[side];
+    const v = hand.rotDelta;
+    hand.rotDelta = 0;
+    return v;
+  }
+
+  window.addEventListener('keydown', onKeyDown);
+  window.addEventListener('keyup', onKeyUp);
+  window.addEventListener('blur', () => keys.clear());
+  window.addEventListener('pagehide', () => {
+    stopTracks();
+    if (camera.landmarker) {
+      try { camera.landmarker.close(); } catch (err) { /* already closed */ }
+      camera.landmarker = null;
+    }
+  });
+  canvas.addEventListener('pointerdown', onPointerDown);
+  canvas.addEventListener('pointermove', onPointerMove);
+  canvas.addEventListener('pointerup', onPointerUp);
+  canvas.addEventListener('pointercancel', onPointerUp);
+  canvas.addEventListener('wheel', onWheel, { passive: false });
+
+  return {
+    hands,
+    update,
+    consumeRot,
+    toggleCamera,
+    startCamera,
+    stopCamera,
+    cameraState: camera,
+    inputMode,
+    keys,
+    // Macros drive the same pinch/curl state the pointer fallback uses, so
+    // scripted commands cannot bypass the hand-target interaction checks.
+    forcePinch(side, value) {
+      const hand = hands[side];
+      if (!hand) return;
+      const want = value >= 1;
+      hand.forced = want ? value : null;
+      hand.pinchRaw = clamp01(value);
+      hand.target.pinch = hand.pinchRaw;
+      hand.pinchClosed = want;
+      hand.target.joints = null;
+      hand.target.curls = hand.target.curls.map((c) => clamp01(c + ((want ? 0.85 : 0.3) - c) * 0.6));
+      hand.target.thumb = clamp01(hand.target.thumb + ((want ? 0.75 : 0.25) - hand.target.thumb) * 0.6);
+      hand.source = 'macro';
+    },
+    forceRotate(side, amount) {
+      const hand = hands[side];
+      if (hand && Number.isFinite(amount)) hand.rotDelta += amount;
+    },
+    cameraFrames() { return cameraFrames; },
+    setHighlight(side, value) {
+      hands[side].target.highlight = value;
+    },
+  };
+}

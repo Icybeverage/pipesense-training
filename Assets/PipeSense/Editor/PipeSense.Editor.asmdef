@@ -1,0 +1,8 @@
+{
+  "name": "PipeSense.Editor",
+  "rootNamespace": "PipeSense.Editor",
+  "references": ["PipeSense.Runtime"],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": true
+}
+

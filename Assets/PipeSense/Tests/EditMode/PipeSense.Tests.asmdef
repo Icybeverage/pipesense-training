@@ -1,0 +1,9 @@
+{
+  "name": "PipeSense.Tests",
+  "rootNamespace": "PipeSense.Tests",
+  "references": ["PipeSense.Runtime"],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": false
+}
+
