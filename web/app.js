@@ -44,7 +44,7 @@ const LESSON_STEPS = [
     hint: 'Pinch the red handle and rotate clockwise until it stops.',
     done: (s) => s.valve.closed,
     tutorial: {
-      image: 'assets/tutorial/step-01.jpg',
+      image: 'https://raw.githubusercontent.com/Icybeverage/pipesense-training/main/web/assets/tutorial/step-01.jpg',
       alt: 'A gloved hand closing the red supply valve under the sink.',
       overlay: '<svg viewBox="0 0 720 720" aria-hidden="true"><path class="diagram-motion" d="M218 302a92 92 0 1 1 116 61"/><path d="m319 330 18 36-40 4"/></svg>',
     },
@@ -55,7 +55,7 @@ const LESSON_STEPS = [
     hint: 'Lift the trap level and center both sockets before you release.',
     done: (s) => s.objects.trap.mode === 'seated',
     tutorial: {
-      image: 'assets/tutorial/step-02.jpg',
+      image: 'https://raw.githubusercontent.com/Icybeverage/pipesense-training/main/web/assets/tutorial/step-02.jpg',
       alt: 'Two gloved hands lifting the P-trap to meet the tailpiece and wall drain sockets.',
       overlay: '<svg viewBox="0 0 720 720" aria-hidden="true"><circle cx="296" cy="287" r="42"/><circle cx="542" cy="298" r="42"/><path d="M296 480V344m-18 24 18-24 18 24M542 478V355m-18 24 18-24 18 24"/></svg>',
     },
@@ -66,7 +66,7 @@ const LESSON_STEPS = [
     hint: 'Seat the wrench jaw on the tail nut and rotate until it clicks tight.',
     done: (s) => s.joints.tail.tight >= TUNE.tightFull,
     tutorial: {
-      image: 'assets/tutorial/step-03.jpg',
+      image: 'https://raw.githubusercontent.com/Icybeverage/pipesense-training/main/web/assets/tutorial/step-03.jpg',
       alt: 'One gloved hand steadying the trap while an adjustable wrench tightens the tail slip nut.',
       overlay: '<svg viewBox="0 0 720 720" aria-hidden="true"><circle cx="388" cy="254" r="46"/><path class="diagram-motion" d="M438 202a88 88 0 0 1 8 114"/><path d="m431 293 16 27 26-18"/></svg>',
     },
@@ -77,7 +77,7 @@ const LESSON_STEPS = [
     hint: 'Hold the trap level and tighten the wall nut with the wrench.',
     done: (s) => s.joints.wall.tight >= TUNE.tightFull,
     tutorial: {
-      image: 'assets/tutorial/step-04.jpg',
+      image: 'https://raw.githubusercontent.com/Icybeverage/pipesense-training/main/web/assets/tutorial/step-04.jpg',
       alt: 'An adjustable wrench tightening the wall-side slip nut on the horizontal drain arm.',
       overlay: '<svg viewBox="0 0 720 720" aria-hidden="true"><circle cx="548" cy="286" r="45"/><path class="diagram-motion" d="M596 231a88 88 0 0 1 8 112"/><path d="m589 320 16 27 26-18"/></svg>',
     },
@@ -88,7 +88,7 @@ const LESSON_STEPS = [
     hint: 'Open the faucet and confirm the trap holds water with no leaks at either joint.',
     done: (s) => s.phase === 'complete',
     tutorial: {
-      image: 'assets/tutorial/step-05.jpg',
+      image: 'https://raw.githubusercontent.com/Icybeverage/pipesense-training/main/web/assets/tutorial/step-05.jpg',
       alt: 'Gloved hands checking the water-filled trap after the test; the joints stay dry.',
       overlay: '<svg viewBox="0 0 720 720" aria-hidden="true"><path class="diagram-motion" d="M360 72v238m-16-24 16 24 16-24"/><path class="diagram-check" d="m273 293 16 16 31-38m197 35 16 16 31-38"/></svg>',
     },
