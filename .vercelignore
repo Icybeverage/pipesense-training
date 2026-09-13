@@ -2,7 +2,7 @@
 .venv
 .env*
 .vscode
-Assets
+/Assets
 Library
 Logs
 Packages
