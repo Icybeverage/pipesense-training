@@ -292,7 +292,11 @@ code {
 .tutorial-deck::-webkit-scrollbar { display:none; }
 .tutorial-card { flex:0 0 min(400px, 84vw); display:flex; flex-direction:column; overflow:hidden; margin:0; scroll-snap-align:center; border-radius:20px; border:1px solid var(--line); background:linear-gradient(150deg,rgba(24,35,54,.96),rgba(8,13,23,.98)); opacity:.48; transform:scale(.94); transition:opacity .35s, transform .45s cubic-bezier(.2,.8,.2,1), border-color .35s; box-shadow:0 20px 54px rgba(0,0,0,.34); }
 .tutorial-card.current { opacity:1; transform:scale(1); border-color:rgba(103,232,249,.4); }
+.tutorial-media { position:relative; overflow:hidden; background:#0a0f18; }
 .tutorial-card img { display:block; width:100%; aspect-ratio:4 / 3; object-fit:cover; object-position:50% 42%; background:#0a0f18; }
+.tutorial-media svg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; fill:none; stroke:rgba(235,253,255,.96); stroke-width:8; stroke-linecap:round; stroke-linejoin:round; filter:drop-shadow(0 2px 3px rgba(0,0,0,.9)) drop-shadow(0 0 7px rgba(34,211,238,.52)); }
+.tutorial-media .diagram-motion { stroke:var(--accent); stroke-dasharray:16 12; }
+.tutorial-media .diagram-check { stroke:#7ce7bd; stroke-width:10; }
 .tutorial-card figcaption { display:grid; gap:7px; align-content:start; flex:1; padding:17px 20px 20px; }
 .tutorial-card figcaption > span { font:600 .62rem/1 var(--mono); letter-spacing:.24em; text-transform:uppercase; color:var(--accent); }
 .tutorial-card h4 { margin:0; font-size:1.26rem; font-weight:520; letter-spacing:-.01em; }
