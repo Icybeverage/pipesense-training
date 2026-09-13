@@ -134,6 +134,73 @@ const session = {
 
 let propsOut = null;
 const tmpVec = new THREE.Vector3();
+let handLabOpen = false;
+const HAND_EDGES = [
+  [0,1],[1,2],[2,3],[3,4], [0,5],[5,6],[6,7],[7,8],
+  [5,9],[9,10],[10,11],[11,12], [9,13],[13,14],[14,15],[15,16],
+  [13,17],[0,17],[17,18],[18,19],[19,20],
+];
+
+function toggleHandLab(force) {
+  handLabOpen = typeof force === 'boolean' ? force : !handLabOpen;
+  document.body.classList.toggle('hand-lab-open', handLabOpen);
+  $('hand-lab-readout').hidden = !handLabOpen;
+  for (const id of ['btn-hand-lab', 'btn-hand-lab-footer']) {
+    const button = $(id);
+    if (button) button.setAttribute('aria-pressed', handLabOpen ? 'true' : 'false');
+  }
+  if (handLabOpen && !input.cameraState.active) input.startCamera();
+}
+
+function renderHandLab() {
+  const overlay = $('hand-lab-canvas');
+  if (!overlay || !handLabOpen) return;
+  const rect = overlay.getBoundingClientRect();
+  const scale = Math.max(1, Math.min(2, devicePixelRatio || 1));
+  const width = Math.max(1, Math.round(rect.width * scale));
+  const height = Math.max(1, Math.round(rect.height * scale));
+  if (overlay.width !== width || overlay.height !== height) { overlay.width = width; overlay.height = height; }
+  const ctx = overlay.getContext('2d');
+  ctx.clearRect(0, 0, width, height);
+  ctx.lineCap = 'round';
+  const hands = input.cameraState.debugHands || {};
+  let total = 0;
+  for (const [side, color] of [['left', '#67e8f9'], ['right', '#fb923c']]) {
+    const data = hands[side];
+    if (!data) continue;
+    total += data.points.length;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.3 * scale;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 7 * scale;
+    for (const [a, b] of HAND_EDGES) {
+      ctx.beginPath();
+      ctx.moveTo(data.points[a].x * width, data.points[a].y * height);
+      ctx.lineTo(data.points[b].x * width, data.points[b].y * height);
+      ctx.stroke();
+    }
+    data.points.forEach((p, index) => {
+      const tip = [4,8,12,16,20].includes(index);
+      ctx.beginPath();
+      ctx.fillStyle = tip ? '#ffffff' : color;
+      ctx.arc(p.x * width, p.y * height, (tip ? 4.2 : 2.5) * scale, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+  ctx.shadowBlur = 0;
+  $('hand-lab-count').textContent = `${total} / 42 landmarks`;
+  $('hand-lab-hands').innerHTML = ['left', 'right'].map((side) => {
+    const d = hands[side];
+    if (!d) return `<section class="hand-lab-hand"><header><span>${side} hand</span><i></i></header><div class="hand-lab-metric"><span>Waiting for hand</span><output>—</output></div></section>`;
+    const curls = [d.thumb, ...d.curls];
+    const bars = curls.map((v, i) => `<span><i style="--curl:${Math.round(v * 100)}%"></i><small>${['T','I','M','R','P'][i]}</small></span>`).join('');
+    return `<section class="hand-lab-hand tracked"><header><span>${side} hand</span><i></i></header>
+      <div class="hand-lab-metric"><span>Tracking confidence</span><output>${Math.round(d.confidence * 100)}%</output></div>
+      <div class="hand-lab-metric"><span>Pinch / whole-hand contact</span><output>${d.pinchClosed ? 'PINCHED' : 'OPEN'} · ${Math.round((d.contact || 0) * 100)}%</output></div>
+      <div class="hand-lab-metric"><span>Palm roll / pitch</span><output>${Math.round(d.roll * 57.3)}° / ${Math.round(d.pitch * 57.3)}°</output></div>
+      <div class="finger-bars" aria-label="Thumb index middle ring and pinky curl">${bars}</div></section>`;
+  }).join('');
+}
 
 function wrenchStateLine(state) {
   if (state.objects.wrench.mode === 'held') {
@@ -1190,6 +1257,7 @@ function frame(now) {
   lastFrame = now;
 
   input.update(dt);
+  renderHandLab();
   for (const side of ['left', 'right']) gloves[side].update(dt, input.hands[side].target);
   propsOut = props.update(sim, dt, gloves);
   interaction.update(dt, gloves, propsOut);
@@ -1289,6 +1357,8 @@ function wireUi() {
     }, 90);
   }, { passive: true });
   $('btn-camera').addEventListener('click', () => { input.toggleCamera(); });
+  $('btn-hand-lab').addEventListener('click', () => toggleHandLab());
+  $('btn-hand-lab-footer').addEventListener('click', () => toggleHandLab());
   $('btn-voice').addEventListener('click', () => { voice.setEnabled(!voice.enabled); });
   $('btn-retry').addEventListener('click', retryLesson);
   $('btn-drop').addEventListener('click', () => {

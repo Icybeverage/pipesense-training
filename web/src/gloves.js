@@ -3,8 +3,18 @@
 // A glove is a procedural rig: palm + cuff + 5 articulated fingers, driven by
 // a pose supplied by the input layer (MediaPipe's 21 landmarks per hand, or
 // the silent QA channel in automated test sessions). Local frame: fingers
-// extend along +Z, the palm normal is +Y, the thumb sits on +X for the right
-// hand and -X for the left.
+// extend along +Z, the palm normal is -Y, the thumb sits on +X for the right
+// hand and -X for the left. Each finger is a chain of tapered phalanges that
+// share the radius at every joint and are covered by a rounded joint volume,
+// so the silhouette reads as one padded work glove rather than separate
+// capsules. The palm masses (thenar, hypothenar, back dome, knuckle row and
+// finger-base webbing) overlap into the same continuous shell.
+//
+// Anchors are ordinary Object3D nodes, so every consumer can read them in
+// world space with getWorldPosition(): pinchAnchor is the thumb/index grasp
+// midpoint, gripAnchor carries the wrench, and `anchors` exposes the palm plus
+// all five fingertips for full-hand contact.
+//
 // root rotation defaults to yaw PI, so an idle glove points into the scene.
 
 import * as THREE from 'three';
@@ -18,6 +28,9 @@ const FINGERS = [
   { key: 'pinky', x: -0.033, dz: -0.008, lens: [0.035, 0.024, 0.018], w: 0.0190, curlMax: [1.25, 1.45, 0.9] },
 ];
 const THUMB = { lens: [0.036, 0.027, 0.020], w: 0.025 };
+
+export const FINGER_ORDER = ['thumb', 'index', 'middle', 'ring', 'pinky'];
+const ANCHOR_KEYS = ['palm', ...FINGER_ORDER];
 
 const LEATHER_SURFACE = makeLeatherSurface();
 
@@ -80,11 +93,14 @@ function makeLeatherSurface() {
       // Keep the grain light enough to carry an industrial glove colour in a
       // dark under-sink bay. The previous near-black albedo multiplied every
       // material colour down until the hands disappeared in captured video.
-      const base = 112 + Math.floor(grain * 44);
+      const base = 118 + Math.floor(grain * 44);
       diffuseData[i * 3 + 0] = Math.min(255, base + Math.floor(warmTint.r * 255 * tint));
       diffuseData[i * 3 + 1] = Math.min(255, base + Math.floor(warmTint.g * 255 * tint));
       diffuseData[i * 3 + 2] = Math.min(255, base + Math.floor(warmTint.b * 255 * tint));
-      roughData[i] = 178 + Math.floor((1 - grain) * 58 + wear * 10);
+      // A flat, high roughness map keeps nitrile/leather matte: the former
+      // wide range produced bright specular blooms that made the finger
+      // phalanges read as hard, shiny robot segments.
+      roughData[i] = 208 + Math.floor((1 - grain) * 34 + wear * 8);
     }
   }
   for (let y = 0; y < size; y++) {
@@ -117,22 +133,97 @@ function makeLeatherSurface() {
   return { diffuseMap, roughnessMap, normalMap };
 }
 
-function leather(color, rough = 0.94, repeat = 3.4) {
+function leather(color, rough = 0.95, repeat = 3.4) {
+  const base = new THREE.Color(color);
   const mat = new THREE.MeshStandardMaterial({
-    color,
-    // Colour comes from the material itself; the former dark diffuse map
-    // multiplied safety colours almost back to black. Normal and roughness
-    // maps retain the leather grain without sacrificing silhouette contrast.
+    color: base,
     normalMap: LEATHER_SURFACE.normalMap.clone(),
-    roughnessMap: LEATHER_SURFACE.roughnessMap.clone(),
-    roughness: rough,
+    // Full roughness and almost no environment response give the glove a
+    // fabric/rubber response instead of the metallic highlights seen in the
+    // previous capture. The brighter diffuse grain preserves visibility.
+    roughness: Math.max(0.98, rough),
     metalness: 0,
-    normalScale: new THREE.Vector2(0.14, 0.14),
-    envMapIntensity: 0.16,
+    emissive: base.clone().multiplyScalar(0.12),
+    emissiveIntensity: 0.22,
+    normalScale: new THREE.Vector2(0.09, 0.09),
+    envMapIntensity: 0,
   });
   mat.normalMap.repeat.set(repeat, repeat);
-  mat.roughnessMap.repeat.set(repeat, repeat);
   return mat;
+}
+
+// Radii along one finger chain: knuckle (MCP) -> PIP -> DIP -> tip. Every
+// phalanx is built from r[i] to r[i + 1], so the chain has no radius step at
+// any joint and the glove can never read as disconnected links.
+function radiusChain(w) {
+  return [w * 0.490, w * 0.455, w * 0.415, w * 0.372];
+}
+
+// A continuous skinned tube removes the visible seams between phalanges. Four
+// bones still preserve MCP/PIP/DIP articulation, but the rendered surface is a
+// single deforming finger like the gloved hands in the 00:22 reference.
+function fingerSkinGeometry(lens, radii, radialSegments = 18, ringsPerBone = 5) {
+  const positions = [];
+  const skinIndices = [];
+  const skinWeights = [];
+  const indices = [];
+  const rings = [];
+  let z0 = 0;
+
+  for (let bone = 0; bone < lens.length; bone++) {
+    for (let step = 0; step <= ringsPerBone; step++) {
+      if (bone > 0 && step === 0) continue;
+      const t = step / ringsPerBone;
+      const eased = t * t * (3 - 2 * t);
+      const z = z0 + lens[bone] * t;
+      const radius = THREE.MathUtils.lerp(radii[bone], radii[bone + 1], eased);
+      const ring = [];
+      for (let j = 0; j < radialSegments; j++) {
+        const a = (j / radialSegments) * Math.PI * 2;
+        ring.push(positions.length / 3);
+        positions.push(Math.cos(a) * radius, Math.sin(a) * radius, z);
+        skinIndices.push(bone, bone + 1, 0, 0);
+        skinWeights.push(1 - t, t, 0, 0);
+      }
+      rings.push(ring);
+    }
+    z0 += lens[bone];
+  }
+
+  for (let r = 0; r < rings.length - 1; r++) {
+    for (let j = 0; j < radialSegments; j++) {
+      const n = (j + 1) % radialSegments;
+      indices.push(rings[r][j], rings[r + 1][j], rings[r + 1][n]);
+      indices.push(rings[r][j], rings[r + 1][n], rings[r][n]);
+    }
+  }
+
+  const start = positions.length / 3;
+  positions.push(0, 0, 0);
+  skinIndices.push(0, 0, 0, 0);
+  skinWeights.push(1, 0, 0, 0);
+  const end = positions.length / 3;
+  positions.push(0, 0, z0);
+  skinIndices.push(lens.length, 0, 0, 0);
+  skinWeights.push(1, 0, 0, 0);
+  for (let j = 0; j < radialSegments; j++) {
+    const n = (j + 1) % radialSegments;
+    indices.push(start, rings[0][n], rings[0][j]);
+    indices.push(end, rings.at(-1)[j], rings.at(-1)[n]);
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(skinIndices, 4));
+  geometry.setAttribute('skinWeight', new THREE.Float32BufferAttribute(skinWeights, 4));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
+function ellipsoid(radius, sx, sy, sz) {
+  return new THREE.SphereGeometry(radius, 16, 12).scale(sx, sy, sz);
 }
 
 function damp(cur, target, lambda, dt) {
@@ -144,54 +235,64 @@ export function createGlove(side) {
   const mats = {
     // Safety-blue backs separate clearly from the cabinet while the graphite
     // grip surfaces preserve a believable professional work-glove finish.
-    leather: leather(side === 'right' ? 0x328da7 : 0x27778f, 0.92, 3.5),
-    leatherPalm: leather(0x343b43, 0.97, 3.9),
-    pad: leather(0x171b20, 1.0, 4.8),
-    cuff: leather(0x255f72, 0.94, 3.2),
-    seam: new THREE.MeshStandardMaterial({ color: 0xf08a24, roughness: 0.78, metalness: 0.02 }),
+    leather: leather(0x4b8190, 1.0, 3.5),
+    leatherPalm: leather(0x56656b, 1.0, 3.9),
+    pad: leather(0x292f33, 1.0, 4.8),
+    cuff: leather(0x3e6975, 1.0, 3.2),
+    seam: new THREE.MeshStandardMaterial({ color: 0xd97a1f, roughness: 0.88, metalness: 0 }),
     reflective: new THREE.MeshStandardMaterial({
       color: 0xffb343,
-      emissive: 0x7a2d00,
-      emissiveIntensity: 0.18,
-      roughness: 0.62,
-      metalness: 0.04,
+      emissive: 0x6b2800,
+      emissiveIntensity: 0.16,
+      roughness: 0.72,
+      metalness: 0,
     }),
   };
 
   const root = new THREE.Group();
   root.name = `glove-${side}`;
 
-  const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.044, 0.040, 0.054, 24, 2, true), mats.cuff);
+  const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.044, 0.040, 0.082, 24, 3, false), mats.cuff);
   cuff.rotation.x = Math.PI / 2;
-  cuff.position.set(0, -0.003, -0.032);
+  cuff.position.set(0, -0.003, -0.047);
+  cuff.castShadow = true;
   root.add(cuff);
-  const cuffRing = new THREE.Mesh(new THREE.TorusGeometry(0.043, 0.0036, 12, 28), mats.seam);
-  cuffRing.position.set(0, -0.003, -0.005);
-  root.add(cuffRing);
 
-  const palm = new THREE.Mesh(new RoundedBoxGeometry(PALM.w, PALM.t, PALM.l, 3, 0.009), mats.leatherPalm);
+  // ------------------------------------------------------------- palm shell
+  // Overlapping masses rather than one box: core block, back-of-hand dome,
+  // broad knuckle row, thenar (thumb side) and hypothenar (pinky side) pads.
+  const palm = new THREE.Mesh(new RoundedBoxGeometry(PALM.w, PALM.t, PALM.l, 4, 0.0135), mats.leatherPalm);
   palm.position.set(0, 0, PALM.l / 2 - 0.006);
   palm.castShadow = true;
   root.add(palm);
-  // A shallow anatomical shell softens the rectangular rig into the convex
-  // silhouette of a gloved metacarpus without changing any landmark pivots.
-  const palmDome = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 18), mats.leather);
-  palmDome.scale.set(PALM.w * 0.48, PALM.t * 0.62, PALM.l * 0.48);
-  palmDome.position.set(0, PALM.t * 0.18, PALM.l * 0.50);
+
+  const palmDome = new THREE.Mesh(ellipsoid(1, PALM.w * 0.50, PALM.t * 0.66, PALM.l * 0.52), mats.leather);
+  palmDome.position.set(0, PALM.t * 0.15, PALM.l * 0.46);
   palmDome.castShadow = true;
   root.add(palmDome);
-  const thenar = new THREE.Mesh(new THREE.SphereGeometry(0.018, 16, 16), mats.leatherPalm);
-  thenar.scale.set(1.1, 0.68, 1.26);
-  thenar.position.set(0.026 * s, -0.0015, 0.047);
+
+  const knuckleRow = new THREE.Mesh(ellipsoid(1, PALM.w * 0.53, PALM.t * 0.60, 0.020), mats.leather);
+  knuckleRow.position.set(0, PALM.t * 0.07, PALM.front - 0.010);
+  knuckleRow.castShadow = true;
+  root.add(knuckleRow);
+
+  const wristMass = new THREE.Mesh(ellipsoid(1, PALM.w * 0.45, PALM.t * 0.54, 0.020), mats.leatherPalm);
+  wristMass.position.set(0, -0.002, -0.008);
+  root.add(wristMass);
+
+  // Fuller thenar and hypothenar: these two masses carry the gloved hand's
+  // real bulge and blend the thumb base and pinky edge into the palm.
+  const thenar = new THREE.Mesh(ellipsoid(1, 0.0235, 0.0150, 0.0325), mats.leatherPalm);
+  thenar.position.set(0.0235 * s, -0.0035, 0.047);
   thenar.castShadow = true;
   root.add(thenar);
-  const hypothenar = new THREE.Mesh(new THREE.SphereGeometry(0.0145, 14, 14), mats.leatherPalm);
-  hypothenar.scale.set(1.08, 0.66, 1.2);
-  hypothenar.position.set(-0.027 * s, -0.001, 0.056);
+  const hypothenar = new THREE.Mesh(ellipsoid(1, 0.0175, 0.0125, 0.0290), mats.leatherPalm);
+  hypothenar.position.set(-0.0285 * s, -0.0035, 0.052);
   hypothenar.castShadow = true;
   root.add(hypothenar);
-  const palmPad = new THREE.Mesh(new RoundedBoxGeometry(PALM.w * 0.82, 0.012, PALM.l * 0.7, 2, 0.006), mats.pad);
-  palmPad.position.set(0, -PALM.t / 2 - 0.004, PALM.l * 0.48);
+
+  const palmPad = new THREE.Mesh(new RoundedBoxGeometry(PALM.w * 0.84, 0.011, PALM.l * 0.68, 3, 0.005), mats.pad);
+  palmPad.position.set(0, -PALM.t / 2 - 0.0035, PALM.l * 0.46);
   palmPad.castShadow = true;
   root.add(palmPad);
   const strap = new THREE.Mesh(new RoundedBoxGeometry(PALM.w * 0.86, 0.0105, 0.016, 2, 0.0038), mats.seam);
@@ -206,93 +307,93 @@ export function createGlove(side) {
     marker.castShadow = true;
     root.add(marker);
   }
-  const knuckle = new THREE.Mesh(new RoundedBoxGeometry(PALM.w * 0.7, 0.012, 0.032, 2, 0.007), mats.pad);
-  knuckle.position.set(0, PALM.t / 2 - 0.004, PALM.front - 0.008);
-  root.add(knuckle);
-  for (const spec of FINGERS) {
-    const knuckleCap = new THREE.Mesh(new THREE.SphereGeometry(spec.w * 0.44, 14, 12), mats.leatherPalm);
-    knuckleCap.scale.set(1.22, 0.72, 1.0);
-    knuckleCap.position.set(spec.x * s, PALM.t / 2 - 0.001, PALM.front + spec.dz - 0.002);
-    knuckleCap.castShadow = true;
-    root.add(knuckleCap);
+
+  // Finger-base webbing: a soft wedge between each adjacent pair of knuckles.
+  // It fills the notch the old rig left open, which was the strongest cue that
+  // the fingers were separate parts.
+  for (let i = 0; i < FINGERS.length - 1; i++) {
+    const a = FINGERS[i];
+    const b = FINGERS[i + 1];
+    const web = new THREE.Mesh(ellipsoid(1, Math.abs(a.x - b.x) * 0.66, PALM.t * 0.74, 0.017), mats.leather);
+    web.position.set(((a.x + b.x) / 2) * s, 0.001, PALM.front - 0.006);
+    web.castShadow = true;
+    root.add(web);
   }
 
+  // ------------------------------------------------------- articulated chains
+  const tipAnchors = {};
   const fingerRigs = [];
-  const tips = { index: null, thumb: null };
-  for (const spec of FINGERS) {
-    const mcp = new THREE.Group();
-    mcp.position.set(spec.x * s, 0.002, PALM.front + spec.dz);
-    root.add(mcp);
-    const joints = [mcp];
-    let parent = mcp;
-    spec.lens.forEach((len, i) => {
-      const taper = 1 - i * 0.115;
-      const radius = spec.w * taper * (0.47 - i * 0.015);
-      const seg = new THREE.Mesh(
-        // Extend each capsule through its pivot so adjacent phalanges overlap
-        // like one padded glove instead of reading as disconnected robot links.
-        new THREE.CapsuleGeometry(radius, Math.max(0.003, len - radius * 2 + 0.010), 5, 14),
-        mats.leather,
-      );
-      seg.rotation.x = Math.PI / 2;
-      seg.position.set(0, 0, len / 2);
-      seg.castShadow = true;
-      parent.add(seg);
-      if (i < spec.lens.length - 1) {
-        const next = new THREE.Group();
-        next.position.set(0, 0, len);
-        parent.add(next);
-        joints.push(next);
-        parent = next;
-      } else {
-        const tip = new THREE.Mesh(new THREE.SphereGeometry(spec.w * 0.39, 14, 12), mats.pad);
-        tip.scale.set(1, 0.78, 1.28);
-        tip.position.set(0, 0, len + 0.004);
-        parent.add(tip);
-        if (spec.key === 'index') {
-          // Endpoint marker at the fingertip; the pinch anchor tracks the
-          // midpoint of this and the thumb endpoint every frame.
-          tips.index = new THREE.Object3D();
-          tips.index.position.set(0, 0, len);
-          parent.add(tips.index);
-        }
-      }
-    });
-    fingerRigs.push({ joints, curlMax: spec.curlMax });
+
+  function buildChain({ key, lens, w, curlMax, base, register = true }) {
+    const radii = radiusChain(w);
+    const bones = lens.map(() => new THREE.Bone());
+    bones.push(new THREE.Bone());
+    bones[0].name = `${key}-mcp`;
+    for (let i = 1; i < bones.length; i++) {
+      bones[i].name = `${key}-${i === 1 ? 'pip' : i === 2 ? 'dip' : 'tip'}`;
+      bones[i].position.z = lens[i - 1];
+      bones[i - 1].add(bones[i]);
+    }
+    const mesh = new THREE.SkinnedMesh(fingerSkinGeometry(lens, radii), mats.leather);
+    mesh.name = `skin-${key}`;
+    mesh.position.copy(base);
+    mesh.castShadow = true;
+    mesh.frustumCulled = false;
+    mesh.add(bones[0]);
+    mesh.bind(new THREE.Skeleton(bones));
+    root.add(mesh);
+
+    const anchor = new THREE.Object3D();
+    anchor.name = `anchor-${key}`;
+    bones.at(-1).add(anchor);
+    tipAnchors[key] = anchor;
+    const tipCap = new THREE.Mesh(ellipsoid(radii.at(-1), 1.0, 0.94, 1.18), mats.leather);
+    tipCap.position.z = radii.at(-1) * 0.22;
+    tipCap.castShadow = true;
+    bones.at(-1).add(tipCap);
+    const joints = bones.slice(0, 3);
+    if (register) fingerRigs.push({ joints, curlMax });
+    return { joints, bones, mesh, anchor };
   }
 
-  const thumbBase = new THREE.Group();
-  thumbBase.position.set(0.040 * s, -0.010, 0.038);
-  root.add(thumbBase);
-  const thumbJoints = [thumbBase];
-  {
-    let parent = thumbBase;
-    THUMB.lens.forEach((len, i) => {
-      const taper = 1 - i * 0.12;
-      const radius = THUMB.w * taper * (0.49 - i * 0.015);
-      const seg = new THREE.Mesh(
-        new THREE.CapsuleGeometry(radius, Math.max(0.003, len - radius * 2 + 0.010), 5, 14),
-        mats.leather,
-      );
-      seg.rotation.x = Math.PI / 2;
-      seg.position.set(0, 0, len / 2);
-      seg.castShadow = true;
-      parent.add(seg);
-      if (i < THUMB.lens.length - 1) {
-        const next = new THREE.Group();
-        next.position.set(0, 0, len);
-        parent.add(next);
-        thumbJoints.push(next);
-        parent = next;
-      } else {
-        tips.thumb = new THREE.Object3D();
-        tips.thumb.position.set(0, 0, len);
-        parent.add(tips.thumb);
-      }
+  for (const spec of FINGERS) {
+    buildChain({
+      key: spec.key,
+      lens: spec.lens,
+      w: spec.w,
+      curlMax: spec.curlMax,
+      base: new THREE.Vector3(spec.x * s, 0.002, PALM.front + spec.dz),
     });
+  }
+
+  const thumbRig = buildChain({
+    key: 'thumb',
+    lens: THUMB.lens,
+    w: THUMB.w,
+    curlMax: [1.1, 1.0, 0.85],
+    base: new THREE.Vector3(0.040 * s, -0.010, 0.038),
+    register: false,
+  });
+  // The thumb has its own opposition transform in addition to bone bends.
+  const thumbBase = thumbRig.joints[0];
+  const thumbJoints = thumbRig.joints;
+
+  const anchors = {};
+  for (const key of ANCHOR_KEYS) {
+    anchors[key] = key === 'palm'
+      // Heel/hollow of the palm: the surface a gloved hand braces with.
+      ? (() => {
+        const node = new THREE.Object3D();
+        node.name = 'anchor-palm';
+        node.position.set(0, -PALM.t * 0.54, PALM.l * 0.55);
+        root.add(node);
+        return node;
+      })()
+      : tipAnchors[key];
   }
 
   const pinchAnchor = new THREE.Object3D();
+  pinchAnchor.name = 'anchor-pinch';
   pinchAnchor.position.set(0.006 * s, 0.004, 0.108);
   root.add(pinchAnchor);
   const gripAnchor = new THREE.Object3D();
@@ -312,6 +413,8 @@ export function createGlove(side) {
   const curled = { fingers: [0, 0, 0, 0], thumb: 0, pinch: 0, highlight: 0, contact: 0 };
   const tipA = new THREE.Vector3();
   const tipB = new THREE.Vector3();
+  const haloPoint = new THREE.Vector3();
+  const gripPoint = new THREE.Vector3();
 
   root.rotation.set(pose.pitch, pose.yaw, pose.roll, 'YXZ');
 
@@ -352,12 +455,26 @@ export function createGlove(side) {
       joint.rotation.z = -0.12 * s * pinch;
     });
 
+    // Centre the carried tool inside the supported hand volume. All five
+    // fingertip landmarks plus the palm contribute, so a wrench or fitting
+    // follows a whole-hand grasp rather than appearing pinned to the wrist.
+    gripAnchor.position.set(0, 0, 0);
+    let gripCount = 0;
+    for (const anchor of Object.values(anchors)) {
+      if (!anchor) continue;
+      anchor.getWorldPosition(gripPoint);
+      root.worldToLocal(gripPoint);
+      gripAnchor.position.add(gripPoint);
+      gripCount += 1;
+    }
+    if (gripCount) gripAnchor.position.multiplyScalar(1 / gripCount);
+
     // The pinch anchor is the grasp point: midpoint of the thumb and index
     // endpoints in the glove's own frame, so it follows the curled fingers
     // instead of hovering at a fixed palm offset.
-    if (tips.index && tips.thumb) {
-      tips.index.getWorldPosition(tipA);
-      tips.thumb.getWorldPosition(tipB);
+    if (tipAnchors.index && tipAnchors.thumb) {
+      tipAnchors.index.getWorldPosition(tipA);
+      tipAnchors.thumb.getWorldPosition(tipB);
       root.worldToLocal(tipA);
       root.worldToLocal(tipB);
       pinchAnchor.position.set(
@@ -365,7 +482,12 @@ export function createGlove(side) {
         (tipA.y + tipB.y) / 2,
         (tipA.z + tipB.z) / 2,
       );
-      halo.position.copy(pinchAnchor.position);
+      // The contact ring follows whichever anchor the interaction layer used,
+      // so a palm brace or a full-finger power grip highlights the right spot.
+      const ring = contactAnchor && contactAnchor.parent ? contactAnchor : pinchAnchor;
+      ring.getWorldPosition(haloPoint);
+      root.worldToLocal(haloPoint);
+      halo.position.copy(haloPoint);
     }
 
     const contact = curled.contact;
@@ -375,14 +497,28 @@ export function createGlove(side) {
     halo.scale.setScalar(pulse * (1 + contact * 0.3));
   }
 
+  // Interaction sets this to the anchor currently touching a target; the halo
+  // reads it on the next update. Null falls back to the pinch midpoint.
+  let contactAnchor = null;
+
   return {
     root,
     side,
     gripAnchor,
     pinchAnchor,
+    anchors,
+    fingerOrder: FINGER_ORDER,
     halo,
     update,
     mats,
+    // Damped curl per finger chain, 0 (open) .. 1 (fully closed). The thumb is
+    // addressed by key, the four fingers by their name in fingerOrder.
+    getCurl(key) {
+      if (key === 'thumb') return curled.thumb;
+      const i = FINGER_ORDER.indexOf(key) - 1;
+      return i >= 0 ? curled.fingers[i] : 0;
+    },
+    setContactAnchor(node) { contactAnchor = node || null; },
     get contact() { return curled.contact; },
   };
 }

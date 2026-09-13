@@ -22,8 +22,11 @@ const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 export function createInteraction({ sim, input, props, onEvent }) {
   const held = { left: null, right: null };
   const wasPinched = { left: false, right: false };
+  const wasPowerGripped = { left: false, right: false };
   const offset = { left: new THREE.Vector3(), right: new THREE.Vector3() };
   const pinchWorld = { left: new THREE.Vector3(), right: new THREE.Vector3() };
+  const gripWorld = { left: new THREE.Vector3(), right: new THREE.Vector3() };
+  const anchorWorld = { left: {}, right: {} };
   const tmp = new THREE.Vector3();
 
   const lastKnown = {
@@ -82,33 +85,70 @@ export function createInteraction({ sim, input, props, onEvent }) {
     }
   }
 
+  function sampleHand(side, glove) {
+    glove.pinchAnchor.getWorldPosition(pinchWorld[side]);
+    glove.gripAnchor.getWorldPosition(gripWorld[side]);
+    for (const [key, anchor] of Object.entries(glove.anchors || {})) {
+      const point = anchorWorld[side][key] || (anchorWorld[side][key] = new THREE.Vector3());
+      anchor.getWorldPosition(point);
+    }
+  }
+
+  function supportAt(side, glove, target, radius) {
+    let dist = pinchWorld[side].distanceTo(target);
+    let anchor = glove.pinchAnchor;
+    // `supports` counts the anatomical set only: palm + five fingertips.
+    // Precision pinch can win the nearest-point test without inflating the
+    // six-point full-hand traction score.
+    let supports = 0;
+    for (const [key, point] of Object.entries(anchorWorld[side])) {
+      const d = point.distanceTo(target);
+      if (d <= radius) supports += 1;
+      if (d < dist) {
+        dist = d;
+        anchor = glove.anchors[key];
+      }
+    }
+    return { dist, supports, anchor };
+  }
+
   function update(dt, gloves, propsOut) {
     updateLastKnown(propsOut);
 
     for (const side of ['left', 'right']) {
       const hand = input.hands[side];
       const glove = gloves[side];
-      glove.pinchAnchor.getWorldPosition(pinchWorld[side]);
+      sampleHand(side, glove);
       const pinch = hand.pinchClosed;
+      const fingerClosure = hand.target.curls.reduce((sum, value) => sum + value, 0) / hand.target.curls.length;
+      // MediaPipe supplies three bends for every finger plus the thumb. A
+      // curled multi-finger pose is therefore a real power grip, independent
+      // of the precision thumb-index pinch gesture.
+      const powerGrip = fingerClosure >= 0.48 && hand.target.thumb >= 0.24;
+      const gripSignal = pinch || powerGrip;
       const rot = input.consumeRot(side);
       const heldEntry = held[side];
+      const graspPoint = heldEntry && heldEntry.mode === 'power' ? gripWorld[side] : pinchWorld[side];
       let highlight = 0;
       let contact = 0;
+      let activeContactAnchor = null;
 
       if (heldEntry && heldEntry.id === 'wrench') {
-        // A carried wrench stays in hand while pinched; the nuts are the
-        // targets it acts on. Releasing the pinch returns it to the shelf.
-        if (!pinch || sim.objects.wrench.heldBy !== side) {
+        // A carried wrench remains supported by either precision pinch or a
+        // tracked whole-hand power grip. All six anatomical anchors continue
+        // to contribute contact while the wrench works against a nut.
+        if (!gripSignal || sim.objects.wrench.heldBy !== side) {
           emit(release(sim, 'wrench', side), side);
           held[side] = null;
         } else {
           contact = 1;
           if (rot !== 0) {
             for (const nut of ['nut_tail', 'nut_wall']) {
-              const d = pinchWorld[side].distanceTo(lastKnown[nut]);
-              if (d <= REACH.nut) {
-                highlight = Math.max(highlight, 1 - d / (REACH.nut * 1.6));
-                contact = Math.max(contact, 1 - d / REACH.nut);
+              const support = supportAt(side, glove, lastKnown[nut], REACH.nut);
+              if (support.dist <= REACH.nut) {
+                highlight = Math.max(highlight, 1 - support.dist / (REACH.nut * 1.6));
+                contact = Math.max(contact, 1 - support.dist / REACH.nut, support.supports / 6);
+                activeContactAnchor = support.anchor;
                 emit(rotate(sim, nut, rot, side), side);
                 break;
               }
@@ -118,50 +158,53 @@ export function createInteraction({ sim, input, props, onEvent }) {
       } else if (!heldEntry) {
         const list = candidates();
         let nearest = null;
-        const p = pinchWorld[side];
         for (const cand of list) {
-          const d = p.distanceTo(candidatePos(cand.id, propsOut));
-          if (!nearest || d < nearest.dist) nearest = { id: cand.id, dist: d, radius: cand.radius };
+          const support = supportAt(side, glove, candidatePos(cand.id, propsOut), cand.radius);
+          if (!nearest || support.dist < nearest.dist) nearest = { id: cand.id, radius: cand.radius, ...support };
         }
         const inReach = nearest && nearest.dist <= nearest.radius;
 
         if (inReach) {
           highlight = Math.max(0, 1 - nearest.dist / (nearest.radius * 1.6));
-          // Fingertip contact fades with distance; grabbing confirms it.
-          contact = clamp(1 - nearest.dist / nearest.radius, 0, 1);
+          contact = clamp(Math.max(1 - nearest.dist / nearest.radius, nearest.supports / 6), 0, 1);
+          activeContactAnchor = nearest.anchor;
         }
 
-        if (pinch && !wasPinched[side] && inReach) {
+        const gripEdge = (pinch && !wasPinched[side]) || (powerGrip && !wasPowerGripped[side]);
+        if (gripEdge && inReach) {
           const id = nearest.id;
           contact = 1;
           emit(grab(sim, id, side), side);
           if (sim.objects.trap.heldBy === side || sim.objects.wrench.heldBy === side
             || sim.valve.heldBy === side || sim.faucet.heldBy === side) {
-            held[side] = { id, kind: id === 'trap' || id === 'wrench' ? 'carry' : 'operate' };
+            const mode = pinch ? 'pinch' : 'power';
+            held[side] = { id, kind: id === 'trap' || id === 'wrench' ? 'carry' : 'operate', mode };
+            const holdPoint = mode === 'power' ? gripWorld[side] : pinchWorld[side];
             if (id === 'trap') {
               offset[side].set(
-                sim.objects.trap.pos.x - pinchWorld[side].x,
-                sim.objects.trap.pos.y - pinchWorld[side].y,
-                sim.objects.trap.pos.z - pinchWorld[side].z,
+                sim.objects.trap.pos.x - holdPoint.x,
+                sim.objects.trap.pos.y - holdPoint.y,
+                sim.objects.trap.pos.z - holdPoint.z,
               );
             }
           }
         }
       } else if (heldEntry.kind === 'carry') {
-        if (!pinch || sim.objects[heldEntry.id].heldBy !== side) {
+        if (!gripSignal || sim.objects[heldEntry.id].heldBy !== side) {
           emit(release(sim, heldEntry.id, side), side);
           held[side] = null;
         } else if (heldEntry.id === 'trap') {
           contact = 1;
+          activeContactAnchor = heldEntry.mode === 'power' ? glove.anchors.palm : glove.pinchAnchor;
           const target = {
-            x: clamp(pinchWorld[side].x + offset[side].x, GEOM.workspace.minX, GEOM.workspace.maxX),
-            y: clamp(pinchWorld[side].y + offset[side].y, GEOM.workspace.minY, GEOM.workspace.maxY),
-            z: clamp(pinchWorld[side].z + offset[side].z, CARRY_CLAMP.minZ, CARRY_CLAMP.maxZ),
+            x: clamp(graspPoint.x + offset[side].x, GEOM.workspace.minX, GEOM.workspace.maxX),
+            y: clamp(graspPoint.y + offset[side].y, GEOM.workspace.minY, GEOM.workspace.maxY),
+            z: clamp(graspPoint.z + offset[side].z, CARRY_CLAMP.minZ, CARRY_CLAMP.maxZ),
           };
           moveCarried(sim, 'trap', target);
         }
       } else if (heldEntry.kind === 'operate') {
-        if (!pinch || sim[heldEntry.id === 'valve_lever' ? 'valve' : 'faucet'].heldBy !== side) {
+        if (!gripSignal || sim[heldEntry.id === 'valve_lever' ? 'valve' : 'faucet'].heldBy !== side) {
           emit(release(sim, heldEntry.id, side), side);
           held[side] = null;
         } else {
@@ -177,7 +220,9 @@ export function createInteraction({ sim, input, props, onEvent }) {
 
       input.setHighlight(side, highlight);
       input.setContact(side, contact);
+      glove.setContactAnchor(activeContactAnchor);
       wasPinched[side] = pinch;
+      wasPowerGripped[side] = powerGrip;
     }
   }
 
@@ -190,5 +235,5 @@ export function createInteraction({ sim, input, props, onEvent }) {
     }
   }
 
-  return { update, dropAll, held, pinchWorld };
+  return { update, dropAll, held, pinchWorld, gripWorld, anchorWorld };
 }

@@ -266,6 +266,7 @@ export function createInput({ canvas, video, onStatus, automated = false }) {
     handsSeen: 0,
     lostSince: 0,
     tmp: { x: 0, y: 0, z: 0 },
+    debugHands: { left: null, right: null },
   };
 
   function status() {
@@ -524,6 +525,7 @@ export function createInput({ canvas, video, onStatus, automated = false }) {
     camera.active = false;
     camera.status = 'off';
     camera.handsSeen = 0;
+    camera.debugHands = { left: null, right: null };
     // The neutral pose belongs to one camera session; the next session starts
     // from the safe absolute mapping and calibrates again.
     resetTrackingFidelity();
@@ -606,6 +608,7 @@ export function createInput({ canvas, video, onStatus, automated = false }) {
     }
     const assigned = assignHands(detections, prev);
     const calibFrames = { left: null, right: null };
+    const debugHands = { left: null, right: null };
 
     for (const side of ['left', 'right']) {
       const hand = hands[side];
@@ -666,7 +669,20 @@ export function createInput({ canvas, video, onStatus, automated = false }) {
       hand.lastSeen = now;
       hand.lastPalm = pose.palm;
       calibFrames[side] = { x: pose.palm.x, y: pose.palm.y, scale: pose.scale };
+      debugHands[side] = {
+        points: det.points.map((p) => ({ x: p.x, y: p.y, z: p.z || 0 })),
+        confidence: det.score,
+        curls: [...smooth.curls],
+        thumb: smooth.thumb,
+        pinchRatio: ratio,
+        pinchClosed: hand.pinchClosed,
+        roll: smooth.roll,
+        pitch: smooth.pitch,
+        contact: hand.contact,
+      };
     }
+
+    camera.debugHands = debugHands;
 
     const outcome = calibrator.sample(dt * 1000, calibFrames);
     if (outcome.justCompleted) {
