@@ -6,7 +6,7 @@ User-supplied Dropbox video `final.mp4`, reviewed only from 00:22–00:26. The r
 
 ## Curriculum reference
 
-Pre-existing TradesQuest lesson: **Build a P-Trap — Grade 4**. Concepts used as reference:
+Pre-existing TradesQuest lesson family: **Build a P-Trap**. Concepts used as reference:
 
 - A P-trap is the U-shaped pipe under a sink.
 - Water held in the trap blocks sewer gases.
@@ -15,3 +15,6 @@ Pre-existing TradesQuest lesson: **Build a P-Trap — Grade 4**. Concepts used a
 
 No TradesQuest source code or media is copied into this repository. The Unity experience, agent loop, prompts, telemetry schema, and backend are new hackathon work.
 
+The learner-facing demo intentionally omits grade bands. PipeSense presents the
+material as a hypothetical professional skills-check practice simulation and
+does not claim to issue or represent an accredited certification.

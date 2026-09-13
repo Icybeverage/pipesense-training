@@ -101,7 +101,8 @@ def evaluator(attempt: Attempt, improved: bool) -> str:
 
 
 def offline_loop(attempt: Attempt) -> dict[str, Any]:
-    improved = attempt.previous_score < 0 or attempt.score > attempt.previous_score
+    baseline = attempt.previous_score < 0
+    improved = attempt.score >= 100 if baseline else attempt.score > attempt.previous_score
     strategy = _deterministic_strategy(attempt, improved)
     return {
         "observer": observer(attempt),
@@ -228,7 +229,8 @@ _inference_op = _decorate_if_tracing("pipesense/inference-coach", inference_coac
 
 
 def run_loop(attempt: Attempt) -> dict[str, Any]:
-    improved = attempt.previous_score < 0 or attempt.score > attempt.previous_score
+    baseline = attempt.previous_score < 0
+    improved = attempt.score >= 100 if baseline else attempt.score > attempt.previous_score
     strategy = _deterministic_strategy(attempt, improved)
     deterministic = {
         "observer": _observer_op(attempt),

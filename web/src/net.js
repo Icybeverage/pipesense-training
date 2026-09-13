@@ -84,7 +84,8 @@ export async function getHealth() {
 // Local fallback coaching when the backend cannot be reached. Mirrors the
 // deterministic observer/coach wording the backend uses for the same issue.
 export function offlineCoaching({ score, previousScore, primaryIssue, detail }) {
-  const improved = previousScore < 0 || score > previousScore;
+  const baseline = previousScore < 0;
+  const improved = baseline ? score >= 100 : score > previousScore;
   const diagnoses = {
     sequence: 'The learner worked out of order.',
     height_alignment: 'The trap is not level with the pipe ends.',

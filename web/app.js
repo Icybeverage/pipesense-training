@@ -34,12 +34,67 @@ const STRATEGY_LABEL = {
   change_modality_kinesthetic: 'Kinesthetic assist — snap window ×1.6',
   step_by_step_reset: 'Step-by-step reset — follow the checklist',
 };
-const PRACTICE_STEPS = [
-  { title: 'Close the supply valve', hint: 'Pinch the red handle and rotate until it stops.', done: (s) => s.valve.closed },
-  { title: 'Seat both sockets', hint: 'Lift the P-trap level and release only when both ends align.', done: (s) => s.objects.trap.mode === 'seated' },
-  { title: 'Tighten the tail nut', hint: 'Hold the adjustable wrench on the tailpiece nut and rotate.', done: (s) => s.joints.tail.tight >= TUNE.tightFull },
-  { title: 'Tighten the wall nut', hint: 'Keep the trap level while tightening the wall-side nut.', done: (s) => s.joints.wall.tight >= TUNE.tightFull },
-  { title: 'Run water and inspect', hint: 'Open the faucet and confirm both joints stay dry.', done: (s) => s.phase === 'complete' },
+const LESSON_STEPS = [
+  {
+    id: 'valve',
+    title: 'Close the supply valve',
+    hint: 'Pinch the red handle and rotate clockwise until it stops.',
+    done: (s) => s.valve.closed,
+    tutorial: {
+      tag: 'ISOLATE',
+      footerLabel: 'Gesture',
+      footerValue: 'Pinch + rotate',
+      svg: '<svg viewBox="0 0 260 150" role="img" aria-label="Turn the shutoff valve clockwise"><path d="M130 34v82M96 58h68M104 48l52 20M104 68l52-20"/><circle cx="130" cy="58" r="31"/><path class="motion" d="M82 106c28 28 68 30 98 4"/><path class="arrow" d="m171 99 12 11-15 7"/></svg>',
+    },
+  },
+  {
+    id: 'seat',
+    title: 'Seat both sockets',
+    hint: 'Lift the trap level. Center the tailpiece and wall arm before you release.',
+    done: (s) => s.objects.trap.mode === 'seated',
+    tutorial: {
+      tag: 'ALIGN',
+      footerLabel: 'Gesture',
+      footerValue: 'Pinch + lift',
+      svg: '<svg viewBox="0 0 260 150" role="img" aria-label="Lift the P-trap into both pipe sockets"><path d="M75 30v40M185 30v40M75 70c0 64 110 64 110 0"/><path class="motion" d="M130 128V92"/><path class="arrow" d="m120 102 10-12 10 12"/><circle cx="75" cy="68" r="13"/><circle cx="185" cy="68" r="13"/></svg>',
+    },
+  },
+  {
+    id: 'tail_nut',
+    title: 'Tighten the tail nut',
+    hint: 'Pick up the adjustable wrench, seat its jaw on the tail nut, then rotate until it clicks tight.',
+    done: (s) => s.joints.tail.tight >= TUNE.tightFull,
+    tutorial: {
+      tag: 'SECURE',
+      footerLabel: 'Tool',
+      footerValue: 'Adjustable wrench',
+      svg: '<svg viewBox="0 0 260 150" role="img" aria-label="Tighten the first slip nut with a wrench"><path d="M72 32v86M188 32v86M72 82c0 48 116 48 116 0"/><circle cx="72" cy="70" r="17"/><path d="m53 116 57-47 15 17-58 47z"/><path class="motion" d="M115 52c24 8 37 29 33 50"/></svg>',
+    },
+  },
+  {
+    id: 'wall_nut',
+    title: 'Tighten the wall nut',
+    hint: 'Keep the trap level and keep the wrench pinched while you secure the wall-side connection.',
+    done: (s) => s.joints.wall.tight >= TUNE.tightFull,
+    tutorial: {
+      tag: 'SECURE',
+      footerLabel: 'Check',
+      footerValue: 'Both joints tight',
+      svg: '<svg viewBox="0 0 260 150" role="img" aria-label="Tighten the wall slip nut with a wrench"><path d="M62 30v92M62 82c0 48 122 48 122 0V54h35"/><circle cx="184" cy="67" r="17"/><path d="m146 125 42-58 18 13-43 58z"/><path class="motion" d="M203 43c19 13 26 34 18 54"/></svg>',
+    },
+  },
+  {
+    id: 'water',
+    title: 'Run water and inspect',
+    hint: 'Open the faucet. The trap must retain water with no leak at either joint.',
+    done: (s) => s.phase === 'complete',
+    tutorial: {
+      tag: 'VERIFY',
+      footerLabel: 'Pass',
+      footerValue: 'Seal holds',
+      svg: '<svg viewBox="0 0 260 150" role="img" aria-label="Run water and verify the trap seal"><path d="M67 28h80c34 0 34 35 34 35"/><path d="M181 63c-12 19-12 28 0 40 12-12 12-21 0-40z"/><path d="M70 95c0 45 120 45 120 0"/><path class="motion" d="M212 72v46"/><path class="arrow" d="m203 108 9 12 9-12"/></svg>',
+    },
+  },
 ];
 
 // -------------------------------------------------------------------- boot
@@ -73,11 +128,31 @@ const session = {
   backend: { cooldownUntil: 0 },
   macro: { name: null, running: false, cancelled: false },
   handsHinted: false,
+  calibNotified: false,
   tutorialIndex: 0,
 };
 
 let propsOut = null;
 const tmpVec = new THREE.Vector3();
+
+function wrenchStateLine(state) {
+  if (state.objects.wrench.mode === 'held') {
+    const side = state.objects.wrench.heldBy || 'hand';
+    return `Wrench held in ${side} hand.`;
+  }
+  return 'Pick up the adjustable wrench from the bench first.';
+}
+
+function describeStep(step, state) {
+  if (step.id === 'tail_nut' || step.id === 'wall_nut') {
+    return {
+      title: step.title,
+      hint: `${wrenchStateLine(state)} ${step.hint}`,
+      checklist: `${step.title} (${state.objects.wrench.mode === 'held' ? 'wrench held' : 'wrench needed'})`,
+    };
+  }
+  return { title: step.title, hint: step.hint, checklist: step.title };
+}
 
 // ------------------------------------------------------------------ guides
 
@@ -128,14 +203,6 @@ function createGuides() {
   pulse.visible = false;
   group.add(pulse);
 
-  const STEPS = [
-    { id: 'valve', label: 'Close the supply valve', done: (s) => s.valve.closed },
-    { id: 'seat', label: 'Lift the P-trap and seat both sockets', done: (s) => s.objects.trap.mode === 'seated' },
-    { id: 'tail_nut', label: 'Tighten the tail slip nut with the wrench', done: (s) => s.joints.tail.tight >= TUNE.tightFull },
-    { id: 'wall_nut', label: 'Tighten the wall slip nut with the wrench', done: (s) => s.joints.wall.tight >= TUNE.tightFull },
-    { id: 'water', label: 'Run water and confirm the seal holds', done: (s) => s.phase === 'complete' },
-  ];
-
   let mode = 'none';
   let stepsSignature = '';
 
@@ -151,21 +218,22 @@ function createGuides() {
   }
 
   function renderSteps(state) {
-    const done = STEPS.map((step) => step.done(state));
-    const signature = done.join(',');
+    const done = LESSON_STEPS.map((step) => step.done(state));
+    const signature = `${done.join(',')}|${state.objects.wrench.mode}|${state.objects.wrench.heldBy || ''}`;
     if (signature === stepsSignature) return;
     stepsSignature = signature;
     const active = done.indexOf(false);
     const list = $('steps-list');
     list.textContent = '';
-    STEPS.forEach((step, i) => {
+    LESSON_STEPS.forEach((step, i) => {
+      const copy = describeStep(step, state);
       const li = document.createElement('li');
-      li.textContent = step.label;
+      li.textContent = copy.checklist;
       li.className = done[i] ? 'done' : i === active ? 'active' : '';
       list.append(li);
     });
     if (active > 0) {
-      showCaption({ text: `Step ${active + 1} of ${STEPS.length} — ${STEPS[active].label}.`, attrib: 'checklist' });
+      showCaption({ text: `Step ${active + 1} of ${LESSON_STEPS.length} — ${describeStep(LESSON_STEPS[active], state).checklist}.`, attrib: 'checklist' });
     }
   }
 
@@ -245,7 +313,7 @@ function createGuides() {
     setMode,
     update,
     get mode() { return mode; },
-    steps: STEPS,
+    steps: LESSON_STEPS,
     celebrate() { fx.spawnPulse('seat', GAS_SEAL_POINT); },
   };
 }
@@ -269,6 +337,9 @@ function onSimEvent(event) {
       break;
     case 'valve_opened':
       showCaption({ text: 'Supply valve open — close it before tightening.', attrib: 'workflow' });
+      break;
+    case 'valve_wrong_direction':
+      showCaption({ text: 'Wrong direction — rotate clockwise to close the supply valve.', attrib: 'workflow' });
       break;
     case 'seated':
       fx.spawnPulse('seat', SEAT_ANCHOR);
@@ -315,8 +386,9 @@ function onSimEvent(event) {
 function onInputStatus(status) {
   const cam = status.camera;
   $('cam-wrap').hidden = !cam.active;
+  const holdTag = cam.holding > 0 && cam.handsSeen === 0 ? ' · holding pose' : '';
   $('cam-tag').textContent = cam.active
-    ? `CAM · ${cam.handsSeen} hand${cam.handsSeen === 1 ? '' : 's'}`
+    ? `CAM · ${cam.handsSeen} hand${cam.handsSeen === 1 ? '' : 's'}${holdTag}`
     : cam.status === 'error' ? `CAM error: ${cam.error}` : 'CAM off';
   $('btn-camera').setAttribute('aria-pressed', cam.active ? 'true' : 'false');
   $('btn-camera').textContent = cam.active ? 'Camera: on' : 'Camera: off';
@@ -325,15 +397,23 @@ function onInputStatus(status) {
   if (setupButton) setupButton.textContent = cam.active ? 'Hand tracking enabled' : 'Enable hand tracking';
   if (tracking) {
     const ready = cam.active && cam.handsSeen > 0;
-    const state = cam.status === 'error' ? 'error' : ready ? 'ready' : cam.active ? 'searching' : 'idle';
+    const calibrating = ready && !cam.calibrated;
+    const state = cam.status === 'error' ? 'error' : ready ? (calibrating ? 'searching' : 'ready') : cam.active ? 'searching' : 'idle';
     tracking.dataset.state = state;
     $('tracking-title').textContent = cam.status === 'error' ? 'Camera unavailable'
-      : ready ? `${cam.handsSeen} hand${cam.handsSeen === 1 ? '' : 's'} mapped`
-        : cam.active ? 'Looking for your hands' : 'Camera not connected';
+      : calibrating ? 'Calibrating your neutral pose'
+        : ready ? `${cam.handsSeen} hand${cam.handsSeen === 1 ? '' : 's'} mapped`
+          : cam.active ? 'Looking for your hands' : 'Camera not connected';
     $('tracking-detail').textContent = cam.status === 'error' ? cam.error
-      : ready ? 'All 21 landmarks are driving the virtual glove joints.'
-        : cam.active ? 'Raise both hands with your palms facing the camera.' : 'The gloves remain available with mouse controls.';
+      : calibrating ? `Hold both hands steady — ${Math.round(cam.calibProgress * 100)}%`
+        : ready ? 'Neutral pose set. All 21 landmarks drive the virtual glove joints.'
+          : cam.active ? 'Raise both hands with your palms facing the camera.' : 'The gloves remain available with mouse controls.';
   }
+  if (cam.calibrated && !session.calibNotified) {
+    session.calibNotified = true;
+    toast('Neutral pose calibrated — motion is now mapped relative to your stance.');
+  }
+  if (!cam.active) session.calibNotified = false;
   if (cam.status === 'error' && cam.error) toast(`Camera unavailable — ${cam.error}`);
   if (cam.active && cam.handsSeen === 0 && !session.handsHinted) {
     session.handsHinted = true;
@@ -349,6 +429,7 @@ function onVoiceStatus(status) {
     : agent.status === 'error' || agent.status === 'unavailable' ? 'ElevenLabs: unavailable'
       : 'Connect live agent';
   renderJudge();
+  renderStory();
 }
 
 function showCaption({ text, attrib }) {
@@ -404,16 +485,17 @@ function setTutorialIndex(index, smooth = true) {
 }
 
 function renderPracticeCard() {
-  const done = PRACTICE_STEPS.map((step) => step.done(sim));
+  const done = LESSON_STEPS.map((step) => step.done(sim));
   let active = done.indexOf(false);
-  if (active < 0) active = PRACTICE_STEPS.length - 1;
-  const step = PRACTICE_STEPS[active];
-  $('practice-count').textContent = `STEP ${String(active + 1).padStart(2, '0')} / ${String(PRACTICE_STEPS.length).padStart(2, '0')}`;
-  $('practice-title').textContent = sim.phase === 'complete' ? 'P-trap verified' : step.title;
-  $('practice-hint').textContent = sim.phase === 'complete' ? 'The trap holds water and blocks sewer gas.' : step.hint;
+  if (active < 0) active = LESSON_STEPS.length - 1;
+  const step = LESSON_STEPS[active];
+  const copy = describeStep(step, sim);
+  $('practice-count').textContent = `STEP ${String(active + 1).padStart(2, '0')} / ${String(LESSON_STEPS.length).padStart(2, '0')}`;
+  $('practice-title').textContent = sim.phase === 'complete' ? 'P-trap verified' : copy.title;
+  $('practice-hint').textContent = sim.phase === 'complete' ? 'The trap holds water and blocks sewer gas.' : copy.hint;
   $('practice-status').textContent = sim.phase === 'complete' ? 'COMPLETE' : 'IN PROGRESS';
   $('practice-status').classList.toggle('complete', sim.phase === 'complete');
-  $('practice-progress').style.width = `${((done.filter(Boolean).length + (sim.phase === 'complete' ? 0 : 0.16)) / PRACTICE_STEPS.length) * 100}%`;
+  $('practice-progress').style.width = `${((done.filter(Boolean).length + (sim.phase === 'complete' ? 0 : 0.16)) / LESSON_STEPS.length) * 100}%`;
 }
 
 function setLoopPhase(phase, message, source) {
@@ -434,6 +516,11 @@ function scheduleAutoEval(delayMs) {
 }
 
 function chooseStrategy(suggested, improved) {
+  const baseline = session.previousScore < 0;
+  if (baseline && session.strategy.current === 'none') {
+    if (session.lastRequest?.payload?.score >= 100) return { strategy: 'reinforce', verdict: 'initial' };
+    return { strategy: 'change_modality_visual', verdict: 'initial' };
+  }
   const current = session.strategy.current;
   if (current !== 'none' && improved) return { strategy: current, verdict: 'kept' };
   if (improved) return { strategy: 'reinforce', verdict: 'kept' };
@@ -444,6 +531,24 @@ function chooseStrategy(suggested, improved) {
     return { strategy: next, verdict: 'replaced' };
   }
   return { strategy: suggested, verdict: 'replaced' };
+}
+
+function renderTutorialDeck() {
+  const deck = $('tutorial-deck');
+  if (!deck) return;
+  deck.textContent = '';
+  LESSON_STEPS.forEach((step, index) => {
+    const card = document.createElement('article');
+    card.className = 'tutorial-card';
+    card.dataset.step = String(index + 1);
+    card.innerHTML = `
+      <div class="card-top"><span>STEP ${String(index + 1).padStart(2, '0')}</span><b>${step.tutorial.tag}</b></div>
+      ${step.tutorial.svg}
+      <h4>${step.title}</h4><p>${step.hint}</p>
+      <footer><span>${step.tutorial.footerLabel}</span><strong>${step.tutorial.footerValue}</strong></footer>
+    `;
+    deck.append(card);
+  });
 }
 
 function applyIntervention(strategy) {
@@ -559,6 +664,7 @@ async function evaluateAttempt(reason, force = false) {
   });
   emit('pipesense:attempt', session.evalHistory[session.evalHistory.length - 1]);
   renderAttempts();
+  renderStory();
   renderJudge();
   setLoopPhase('evaluate', outcome.evaluator, http.ok ? 'W&B · Weave traced' : 'Local fallback');
   session.inFlight = false;
@@ -827,6 +933,42 @@ function renderAttempts() {
   }
 }
 
+function renderStory() {
+  if ($('story').hidden) return;
+  const latest = session.evalHistory.length ? session.evalHistory[session.evalHistory.length - 1] : null;
+  if (!latest || !latest.response || !latest.response.outcome) {
+    $('story-attempt').textContent = 'No run yet.';
+    $('story-issue').textContent = 'No run yet.';
+    $('story-score').textContent = 'No run yet.';
+    $('story-strategy').textContent = 'No run yet.';
+    $('story-inference').textContent = 'No run yet.';
+    $('story-weave').textContent = 'No run yet.';
+    $('story-result').textContent = 'No run yet.';
+    $('story-note').textContent = 'Run at least one evaluation to populate real evidence. This panel never fabricates values.';
+    return;
+  }
+  const evidence = latest.response.evidence || {};
+  const provider = evidence.provider || {};
+  const tracing = evidence.tracing || {};
+  const score = evidence.deterministic_score || {};
+  const prev = Number.isFinite(score.previous) ? score.previous : latest.previous;
+  const curr = Number.isFinite(score.current) ? score.current : latest.score;
+  const hasPrev = Number.isFinite(prev) && prev >= 0;
+  const delta = hasPrev ? curr - prev : null;
+  $('story-attempt').textContent = String(latest.attempt);
+  $('story-issue').textContent = latest.primary_issue || 'none';
+  $('story-score').textContent = hasPrev ? `${prev} → ${curr} (${delta >= 0 ? '+' : ''}${delta})` : `${curr} (baseline)`;
+  $('story-strategy').textContent = `${latest.strategy || 'none'}${latest.verdict ? ` (${latest.verdict})` : ''}`;
+  const providerName = provider.name || latest.outcome?.provider || 'deterministic-offline';
+  const usage = provider.used ? 'used' : 'fallback';
+  $('story-inference').textContent = `${providerName}; ${usage}`;
+  $('story-weave').textContent = tracing.active
+    ? `${tracing.project || 'project unknown'} · trace active`
+    : `${tracing.project || 'no active project'} · trace inactive`;
+  $('story-result').textContent = latest.outcome.improved ? 'improved' : 'did not improve';
+  $('story-note').textContent = 'Live run evidence from the most recent evaluated attempt.';
+}
+
 function renderJudge() {
   if ($('judge').hidden) return;
   const health = session.health;
@@ -875,6 +1017,7 @@ async function probeHealth() {
   session.health = health;
   if (health.ok && health.data?.tracing?.active) $('loop-source').textContent = 'W&B · Weave ready';
   renderJudge();
+  renderStory();
   toast(health.ok ? `Backend healthy (${health.ms} ms)` : `Backend unavailable — ${health.error}`);
 }
 
@@ -884,6 +1027,14 @@ function toggleJudge(force) {
   panel.hidden = !open;
   $('btn-judge').setAttribute('aria-pressed', open ? 'true' : 'false');
   if (open) renderJudge();
+}
+
+function toggleStory(force) {
+  const panel = $('story');
+  const open = force !== undefined ? force : panel.hidden;
+  panel.hidden = !open;
+  $('btn-story').setAttribute('aria-pressed', open ? 'true' : 'false');
+  if (open) renderStory();
 }
 
 // ---------------------------------------------------------------- commands
@@ -899,7 +1050,7 @@ function runCommand(raw) {
   const rest = parts.join(' ');
   switch (cmd) {
     case 'help':
-      toast('Commands: help, status, reset, camera on|off, voice on|off, judge, run, valve, seat, tighten tail|wall, water, eval, health, agent connect|disconnect, say <text>, ghost on|off, align on|off, steps on|off');
+      toast('Commands: help, status, reset, camera on|off, voice on|off, judge, story, run, valve, seat, tighten tail|wall, water, eval, health, agent connect|disconnect, say <text>, ghost on|off, align on|off, steps on|off');
       break;
     case 'status': {
       const r = evaluateSim(sim);
@@ -919,6 +1070,9 @@ function runCommand(raw) {
       break;
     case 'judge':
       toggleJudge();
+      break;
+    case 'story':
+      toggleStory();
       break;
     case 'run':
     case 'auto':
@@ -1028,6 +1182,7 @@ function resize() {
 }
 
 function wireUi() {
+  renderTutorialDeck();
   $('btn-go').addEventListener('click', async () => {
     const wasStarted = session.started;
     session.started = true;
@@ -1040,15 +1195,11 @@ function wireUi() {
     setLoopPhase('observe', session.attempts ? 'Continue the coached retry.' : 'Your first attempt becomes the baseline.', session.health?.ok ? 'W&B · Weave ready' : 'Connecting…');
     if (wasStarted) return;
     const opening = 'Workspace ready. Close the supply valve, seat the trap on both pipe ends, then tighten the slip nuts.';
-    showCaption({ text: 'Connecting Maya, your live coach…', attrib: 'elevenlabs · live' });
     if (IS_AUTOMATED_SESSION) {
       showCaption({ text: opening, attrib: 'coach · silent QA' });
       return;
     }
-    const connected = await voice.connect();
-    if (!connected.agent.connected) {
-      voice.speak({ text: opening, attrib: 'coach · browser fallback' });
-    }
+    showCaption({ text: opening, attrib: 'coach · text' });
   });
   $('btn-setup-camera').addEventListener('click', () => { input.toggleCamera(); });
   $('btn-tour').addEventListener('click', () => showFlowStage('tutorial'));
@@ -1083,6 +1234,8 @@ function wireUi() {
     showFlowStage('tutorial');
     $('btn-go').textContent = 'Return to simulation';
   });
+  $('btn-story').addEventListener('click', () => toggleStory());
+  $('btn-story-close').addEventListener('click', () => toggleStory(false));
   $('btn-judge').addEventListener('click', () => toggleJudge());
   $('btn-judge-close').addEventListener('click', () => toggleJudge(false));
   $('btn-health').addEventListener('click', probeHealth);
@@ -1133,6 +1286,7 @@ window.addEventListener('pipesense:agent-say', (event) => {
 wireUi();
 resize();
 renderAttempts();
+renderStory();
 renderJudge();
 requestAnimationFrame(frame);
 probeHealth();

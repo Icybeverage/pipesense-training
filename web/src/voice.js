@@ -62,7 +62,8 @@ export function createVoice({ onCaption, onStatus } = {}) {
     sdk: null,
   };
   const speech = { available: hasSynthesis, voice: null };
-  const state = { enabled: true, used: 'none', lines: 0, last: null };
+  // Voice playback is opt-in; captions remain active by default.
+  const state = { enabled: false, used: 'none', lines: 0, last: null };
 
   function emit(name, detail) {
     window.dispatchEvent(new CustomEvent(name, { detail }));

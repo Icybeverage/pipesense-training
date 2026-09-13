@@ -70,6 +70,7 @@ export function createGlove(side) {
   root.add(knuckle);
 
   const fingerRigs = [];
+  const tips = { index: null, thumb: null };
   for (const spec of FINGERS) {
     const mcp = new THREE.Group();
     mcp.position.set(spec.x * s, 0.002, PALM.front + spec.dz);
@@ -91,6 +92,13 @@ export function createGlove(side) {
         const tip = new THREE.Mesh(new RoundedBoxGeometry(spec.w * 0.94, spec.w * 0.8, 0.012, 2, spec.w * 0.3), mats.pad);
         tip.position.set(0, 0, len + 0.004);
         parent.add(tip);
+        if (spec.key === 'index') {
+          // Endpoint marker at the fingertip; the pinch anchor tracks the
+          // midpoint of this and the thumb endpoint every frame.
+          tips.index = new THREE.Object3D();
+          tips.index.position.set(0, 0, len);
+          parent.add(tips.index);
+        }
       }
     });
     fingerRigs.push({ joints, curlMax: spec.curlMax });
@@ -113,6 +121,10 @@ export function createGlove(side) {
         parent.add(next);
         thumbJoints.push(next);
         parent = next;
+      } else {
+        tips.thumb = new THREE.Object3D();
+        tips.thumb.position.set(0, 0, len);
+        parent.add(tips.thumb);
       }
     });
   }
@@ -123,16 +135,20 @@ export function createGlove(side) {
   const gripAnchor = new THREE.Object3D();
   root.add(gripAnchor);
 
+  const haloBase = new THREE.Color(side === 'right' ? 0xffc26b : 0x6fe3f5);
+  const haloHot = new THREE.Color(0xfff3da);
   const halo = new THREE.Mesh(
     new THREE.TorusGeometry(0.02, 0.0032, 8, 24),
-    new THREE.MeshBasicMaterial({ color: side === 'right' ? 0xffc26b : 0x6fe3f5, transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false }),
+    new THREE.MeshBasicMaterial({ color: haloBase.clone(), transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false }),
   );
   halo.position.copy(pinchAnchor.position);
   halo.rotation.x = Math.PI / 2;
   root.add(halo);
 
   const pose = { yaw: Math.PI, pitch: -0.18, roll: 0 };
-  const curled = { fingers: [0, 0, 0, 0], thumb: 0, pinch: 0, highlight: 0 };
+  const curled = { fingers: [0, 0, 0, 0], thumb: 0, pinch: 0, highlight: 0, contact: 0 };
+  const tipA = new THREE.Vector3();
+  const tipB = new THREE.Vector3();
 
   root.rotation.set(pose.pitch, pose.yaw, pose.roll, 'YXZ');
 
@@ -149,6 +165,7 @@ export function createGlove(side) {
       curled.thumb = damp(curled.thumb, target.thumb, 16, dt);
       curled.pinch = damp(curled.pinch, target.pinch, 18, dt);
       curled.highlight = damp(curled.highlight, target.highlight || 0, 10, dt);
+      curled.contact = damp(curled.contact, target.contact || 0, 14, dt);
     }
     root.rotation.set(pose.pitch, pose.yaw, pose.roll, 'YXZ');
 
@@ -172,10 +189,37 @@ export function createGlove(side) {
       joint.rotation.z = -0.12 * s * pinch;
     });
 
-    halo.material.opacity = Math.min(0.85, curled.highlight * 0.55 + pinch * 0.5);
-    const pulse = 1 + Math.sin(performance.now() * 0.006) * 0.08 * curled.highlight;
-    halo.scale.setScalar(pulse);
+    // The pinch anchor is the grasp point: midpoint of the thumb and index
+    // endpoints in the glove's own frame, so it follows the curled fingers
+    // instead of hovering at a fixed palm offset.
+    if (tips.index && tips.thumb) {
+      tips.index.getWorldPosition(tipA);
+      tips.thumb.getWorldPosition(tipB);
+      root.worldToLocal(tipA);
+      root.worldToLocal(tipB);
+      pinchAnchor.position.set(
+        (tipA.x + tipB.x) / 2,
+        (tipA.y + tipB.y) / 2,
+        (tipA.z + tipB.z) / 2,
+      );
+      halo.position.copy(pinchAnchor.position);
+    }
+
+    const contact = curled.contact;
+    halo.material.opacity = Math.min(0.95, curled.highlight * 0.5 + pinch * 0.35 + contact * 0.6);
+    halo.material.color.copy(haloBase).lerp(haloHot, contact);
+    const pulse = 1 + Math.sin(performance.now() * 0.006) * 0.08 * curled.highlight + contact * 0.2;
+    halo.scale.setScalar(pulse * (1 + contact * 0.3));
   }
 
-  return { root, side, gripAnchor, pinchAnchor, halo, update, mats };
+  return {
+    root,
+    side,
+    gripAnchor,
+    pinchAnchor,
+    halo,
+    update,
+    mats,
+    get contact() { return curled.contact; },
+  };
 }

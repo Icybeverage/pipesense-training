@@ -35,7 +35,7 @@
     <div class="flow-shell">
       <header class="flow-head">
         <div>
-          <p class="eyebrow">Professional skills simulation</p>
+          <p class="eyebrow">Certification practice · plumbing skills check</p>
           <h2>Build a P-Trap</h2>
         </div>
         <div class="flow-progress" aria-label="Setup progress"><i class="active"></i><i></i><i></i></div>
@@ -69,38 +69,7 @@
           <div><span class="stage-kicker">02 · Visual walkthrough</span><h3 id="tutorial-title">Learn the sequence</h3></div>
           <p>Scroll the procedure cards. The active card will follow you into the simulation.</p>
         </div>
-        <div class="tutorial-deck" id="tutorial-deck" tabindex="0" aria-label="P-trap procedure cards">
-          <article class="tutorial-card" data-step="1">
-            <div class="card-top"><span>STEP 01</span><b>ISOLATE</b></div>
-            <svg viewBox="0 0 260 150" role="img" aria-label="Turn the shutoff valve clockwise"><path d="M130 34v82M96 58h68M104 48l52 20M104 68l52-20"/><circle cx="130" cy="58" r="31"/><path class="motion" d="M82 106c28 28 68 30 98 4"/><path class="arrow" d="m171 99 12 11-15 7"/></svg>
-            <h4>Close the supply valve</h4><p>Pinch the red handle and rotate until it stops. Never work on a live line.</p>
-            <footer><span>Gesture</span><strong>Pinch + rotate</strong></footer>
-          </article>
-          <article class="tutorial-card" data-step="2">
-            <div class="card-top"><span>STEP 02</span><b>ALIGN</b></div>
-            <svg viewBox="0 0 260 150" role="img" aria-label="Lift the P-trap into both pipe sockets"><path d="M75 30v40M185 30v40M75 70c0 64 110 64 110 0"/><path class="motion" d="M130 128V92"/><path class="arrow" d="m120 102 10-12 10 12"/><circle cx="75" cy="68" r="13"/><circle cx="185" cy="68" r="13"/></svg>
-            <h4>Seat both sockets</h4><p>Lift the trap level. Center the tailpiece and wall arm before you release.</p>
-            <footer><span>Gesture</span><strong>Pinch + lift</strong></footer>
-          </article>
-          <article class="tutorial-card" data-step="3">
-            <div class="card-top"><span>STEP 03</span><b>SECURE</b></div>
-            <svg viewBox="0 0 260 150" role="img" aria-label="Tighten the first slip nut with a wrench"><path d="M72 32v86M188 32v86M72 82c0 48 116 48 116 0"/><circle cx="72" cy="70" r="17"/><path d="m53 116 57-47 15 17-58 47z"/><path class="motion" d="M115 52c24 8 37 29 33 50"/></svg>
-            <h4>Tighten the tail nut</h4><p>Pick up the adjustable wrench, seat its jaw, and turn until the joint clicks tight.</p>
-            <footer><span>Tool</span><strong>Adjustable wrench</strong></footer>
-          </article>
-          <article class="tutorial-card" data-step="4">
-            <div class="card-top"><span>STEP 04</span><b>SECURE</b></div>
-            <svg viewBox="0 0 260 150" role="img" aria-label="Tighten the wall slip nut with a wrench"><path d="M62 30v92M62 82c0 48 122 48 122 0V54h35"/><circle cx="184" cy="67" r="17"/><path d="m146 125 42-58 18 13-43 58z"/><path class="motion" d="M203 43c19 13 26 34 18 54"/></svg>
-            <h4>Tighten the wall nut</h4><p>Keep the trap level while you secure the wall-side connection.</p>
-            <footer><span>Check</span><strong>Both joints tight</strong></footer>
-          </article>
-          <article class="tutorial-card" data-step="5">
-            <div class="card-top"><span>STEP 05</span><b>VERIFY</b></div>
-            <svg viewBox="0 0 260 150" role="img" aria-label="Run water and verify the trap seal"><path d="M67 28h80c34 0 34 35 34 35"/><path d="M181 63c-12 19-12 28 0 40 12-12 12-21 0-40z"/><path d="M70 95c0 45 120 45 120 0"/><path class="motion" d="M212 72v46"/><path class="arrow" d="m203 108 9 12 9-12"/></svg>
-            <h4>Run water and inspect</h4><p>Open the faucet. The trap must retain water with no leak at either joint.</p>
-            <footer><span>Pass</span><strong>Seal holds</strong></footer>
-          </article>
-        </div>
+        <div class="tutorial-deck" id="tutorial-deck" tabindex="0" aria-label="P-trap procedure cards"></div>
         <div class="deck-controls">
           <button class="btn ghost" id="btn-tour-back" type="button">Back</button>
           <span id="deck-position">1 / 5</span>
@@ -146,17 +115,68 @@
 
   <footer class="controls" id="controls">
     <button class="btn" id="btn-camera" type="button" aria-pressed="false">Camera: off</button>
-    <button class="btn" id="btn-voice" type="button" aria-pressed="true">Maya: on</button>
+    <button class="btn" id="btn-voice" type="button" aria-pressed="false">Maya: off</button>
     <button class="btn" id="btn-guide" type="button">Procedure</button>
     <button class="btn" id="btn-retry" type="button">Retry</button>
     <button class="btn" id="btn-drop" type="button">Release hands</button>
     <details class="more"><summary class="btn ghost">More</summary><div class="more-menu">
       <label class="cmd-wrap"><span class="sr-only">Command</span><input class="cmd" id="cmd" type="text" autocomplete="off" spellcheck="false" placeholder="Demo command…" /></label>
+      <button class="btn ghost" id="btn-story" type="button" aria-expanded="false" aria-controls="story">W&amp;B story</button>
       <button class="btn ghost" id="btn-judge" type="button" aria-expanded="false" aria-controls="judge">Judge evidence</button>
     </div></details>
   </footer>
 
   <div class="toast" id="toast" role="status" hidden></div>
+
+  <aside class="story" id="story" hidden aria-label="W&B Weave presentation story">
+    <header class="story-head">
+      <h2>W&amp;B turns each plumbing attempt into a better next attempt</h2>
+      <button class="btn ghost" id="btn-story-close" type="button">Close</button>
+    </header>
+    <p class="story-intro">PipeSense keeps task correctness deterministic, then uses W&amp;B to observe the failure, generate concise coaching, apply a different training intervention, and measure whether the retry improved.</p>
+
+    <section class="story-loop" aria-label="Observe Coach Adapt Retry Evaluate">
+      <div class="loop-stage"><b>Observe</b><span>Geometry + sequence telemetry captured</span></div>
+      <div class="loop-arrow">→</div>
+      <div class="loop-stage"><b>Coach</b><span>W&amp;B Inference rewrites the hint</span></div>
+      <div class="loop-arrow">→</div>
+      <div class="loop-stage"><b>Adapt</b><span>Strategy selected from bounded options</span></div>
+      <div class="loop-arrow strong">→</div>
+      <div class="loop-stage"><b>Retry</b><span>Simulation changes before the next run</span></div>
+      <div class="loop-arrow">→</div>
+      <div class="loop-stage"><b>Evaluate</b><span>Score delta compared in Weave</span></div>
+    </section>
+
+    <section class="story-sec">
+      <h3>What W&amp;B actually does</h3>
+      <ul>
+        <li><code>pipesense/attempt-loop</code> traces nested observer, coach, evaluator and inference operations.</li>
+        <li>W&amp;B Inference can rewrite coaching language; it cannot change deterministic correctness or score.</li>
+        <li>Retry policy stays bounded: visual target, kinesthetic snap assist, or step-by-step reset.</li>
+        <li>Evaluation compares deterministic score against the previous attempt and keeps or replaces strategy.</li>
+      </ul>
+    </section>
+
+    <section class="story-sec">
+      <h3>Evidence panel</h3>
+      <dl class="story-evidence" id="story-evidence">
+        <div><dt>Attempt</dt><dd id="story-attempt">No run yet.</dd></div>
+        <div><dt>Issue</dt><dd id="story-issue">No run yet.</dd></div>
+        <div><dt>Score</dt><dd id="story-score">No run yet.</dd></div>
+        <div><dt>Intervention</dt><dd id="story-strategy">No run yet.</dd></div>
+        <div><dt>Inference</dt><dd id="story-inference">No run yet.</dd></div>
+        <div><dt>Weave</dt><dd id="story-weave">No run yet.</dd></div>
+        <div><dt>Result</dt><dd id="story-result">No run yet.</dd></div>
+      </dl>
+      <p class="story-note" id="story-note">Run at least one evaluation to populate real evidence. This panel never fabricates values.</p>
+    </section>
+
+    <section class="story-sec">
+      <h3>Deterministic scoring vs W&amp;B inference</h3>
+      <p><b>Deterministic scoring:</b> The browser simulation computes geometry, sequencing, score, and pass/fail.</p>
+      <p><b>W&amp;B inference:</b> Optional provider output rewrites coaching text and strategy suggestion, then Weave traces the loop state.</p>
+    </section>
+  </aside>
 
   <aside class="judge" id="judge" hidden aria-label="Judge evidence view">
     <header class="judge-head">

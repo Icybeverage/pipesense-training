@@ -55,8 +55,8 @@ geometry leaves visible water in the trap and blocks a sewer-gas visualization.
 Incorrect height, gap, sequence or tightening creates a distinct failure and a
 targeted retry from the voice coach.
 
-Source concept: TradesQuest `content/lessons/plumb.json`, Grade 4 “Build a
-P-Trap.” The course marks the activity as a classroom model and content draft;
+Source concept: TradesQuest `content/lessons/plumb.json`, “Build a P-Trap.”
+The course marks the activity as a classroom model and content draft;
 this demo is likewise training simulation, not field authorization or
 certification.
 The course marks these activities as classroom models and content drafts; this

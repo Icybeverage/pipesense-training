@@ -19,6 +19,16 @@ class AgentLoopTests(unittest.TestCase):
         self.assertTrue(result["improved"])
         self.assertIn("41 to 82", result["evaluator"])
 
+    def test_failed_baseline_uses_initial_visual_intervention(self):
+        result = offline_loop(Attempt(1, 72, -1, "sequence"))
+        self.assertFalse(result["improved"])
+        self.assertEqual(result["strategy"], "change_modality_visual")
+
+    def test_perfect_baseline_can_reinforce(self):
+        result = offline_loop(Attempt(1, 100, -1, "none"))
+        self.assertTrue(result["improved"])
+        self.assertEqual(result["strategy"], "reinforce")
+
     def test_failed_retry_changes_strategy_deterministically(self):
         result = offline_loop(Attempt(2, 40, 41, "height_alignment"))
         self.assertEqual(result["strategy"], "change_modality_visual")

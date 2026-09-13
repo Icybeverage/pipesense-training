@@ -169,4 +169,13 @@ function turnFaucetOn(s, hand = 'right') {
   assert.equal(result.primary_issue, 'none');
 }
 
+// 10. Valve wrong-direction turn emits explicit corrective event.
+{
+  const s = createSim();
+  grab(s, 'valve_lever', 'left');
+  const events = rotate(s, 'valve_lever', 0.25, 'left');
+  assert.equal(events[0].type, 'valve_wrong_direction');
+  assert.equal(events[0].expected, 'clockwise');
+}
+
 console.log('sim.test.mjs: all assertions passed');

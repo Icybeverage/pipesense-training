@@ -222,6 +222,9 @@ export function rotate(state, id, delta, hand) {
     if (state.valve.heldBy !== hand) return events;
     const { closedAngle, closedLatch, reopenLatch } = GEOM.valve;
     const before = state.valve.closed;
+    if (!before && delta > 0.015) {
+      events.push({ type: 'valve_wrong_direction', expected: 'clockwise', direction: 'counterclockwise' });
+    }
     // Lever travel is one-directional toward the closed stop.
     state.valve.angle = clamp(state.valve.angle + delta * 57.2958, closedAngle, 0);
     if (!before && state.valve.angle <= closedLatch) {

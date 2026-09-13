@@ -92,6 +92,7 @@ export function createInteraction({ sim, input, props, onEvent }) {
       const rot = input.consumeRot(side);
       const heldEntry = held[side];
       let highlight = 0;
+      let contact = 0;
 
       if (heldEntry && heldEntry.id === 'wrench') {
         // A carried wrench stays in hand while pinched; the nuts are the
@@ -99,13 +100,17 @@ export function createInteraction({ sim, input, props, onEvent }) {
         if (!pinch || sim.objects.wrench.heldBy !== side) {
           emit(release(sim, 'wrench', side), side);
           held[side] = null;
-        } else if (rot !== 0) {
-          for (const nut of ['nut_tail', 'nut_wall']) {
-            const d = pinchWorld[side].distanceTo(lastKnown[nut]);
-            if (d <= REACH.nut) {
-              highlight = Math.max(highlight, 1 - d / (REACH.nut * 1.6));
-              emit(rotate(sim, nut, rot, side), side);
-              break;
+        } else {
+          contact = 1;
+          if (rot !== 0) {
+            for (const nut of ['nut_tail', 'nut_wall']) {
+              const d = pinchWorld[side].distanceTo(lastKnown[nut]);
+              if (d <= REACH.nut) {
+                highlight = Math.max(highlight, 1 - d / (REACH.nut * 1.6));
+                contact = Math.max(contact, 1 - d / REACH.nut);
+                emit(rotate(sim, nut, rot, side), side);
+                break;
+              }
             }
           }
         }
@@ -119,10 +124,15 @@ export function createInteraction({ sim, input, props, onEvent }) {
         }
         const inReach = nearest && nearest.dist <= nearest.radius;
 
-        if (inReach) highlight = Math.max(0, 1 - nearest.dist / (nearest.radius * 1.6));
+        if (inReach) {
+          highlight = Math.max(0, 1 - nearest.dist / (nearest.radius * 1.6));
+          // Fingertip contact fades with distance; grabbing confirms it.
+          contact = clamp(1 - nearest.dist / nearest.radius, 0, 1);
+        }
 
         if (pinch && !wasPinched[side] && inReach) {
           const id = nearest.id;
+          contact = 1;
           emit(grab(sim, id, side), side);
           if (sim.objects.trap.heldBy === side || sim.objects.wrench.heldBy === side
             || sim.valve.heldBy === side || sim.faucet.heldBy === side) {
@@ -141,6 +151,7 @@ export function createInteraction({ sim, input, props, onEvent }) {
           emit(release(sim, heldEntry.id, side), side);
           held[side] = null;
         } else if (heldEntry.id === 'trap') {
+          contact = 1;
           const target = {
             x: clamp(pinchWorld[side].x + offset[side].x, GEOM.workspace.minX, GEOM.workspace.maxX),
             y: clamp(pinchWorld[side].y + offset[side].y, GEOM.workspace.minY, GEOM.workspace.maxY),
@@ -152,8 +163,11 @@ export function createInteraction({ sim, input, props, onEvent }) {
         if (!pinch || sim[heldEntry.id === 'valve_lever' ? 'valve' : 'faucet'].heldBy !== side) {
           emit(release(sim, heldEntry.id, side), side);
           held[side] = null;
-        } else if (rot !== 0) {
-          emit(rotate(sim, heldEntry.id, rot, side), side);
+        } else {
+          contact = 1;
+          if (rot !== 0) {
+            emit(rotate(sim, heldEntry.id, rot, side), side);
+          }
         }
       }
 
@@ -161,6 +175,7 @@ export function createInteraction({ sim, input, props, onEvent }) {
       if (wrenchHeldBy(side)) highlight = Math.max(highlight, 0.25);
 
       input.setHighlight(side, highlight);
+      input.setContact(side, contact);
       wasPinched[side] = pinch;
     }
   }
