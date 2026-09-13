@@ -1,9 +1,10 @@
 // PipeSense virtual work gloves.
 //
 // A glove is a procedural rig: palm + cuff + 5 articulated fingers, driven by
-// a pose supplied by the input layer (MediaPipe landmarks or the mouse and
-// keyboard fallback). Local frame: fingers extend along +Z, the palm normal
-// is +Y, the thumb sits on +X for the right hand and -X for the left.
+// a pose supplied by the input layer (MediaPipe's 21 landmarks per hand, or
+// the silent QA channel in automated test sessions). Local frame: fingers
+// extend along +Z, the palm normal is +Y, the thumb sits on +X for the right
+// hand and -X for the left.
 // root rotation defaults to yaw PI, so an idle glove points into the scene.
 
 import * as THREE from 'three';
@@ -173,7 +174,7 @@ export function createGlove(side) {
       const c = curled.fingers[fi];
       rig.joints.forEach((joint, ji) => {
         // Camera poses include the three MediaPipe bends for this finger.
-        // Fallback input omits them and uses the aggregate curl instead.
+        // Scripted QA poses omit them and use the aggregate curl instead.
         const trackedJoint = target && target.joints && target.joints[fi]
           ? target.joints[fi][ji]
           : null;

@@ -14,8 +14,11 @@ landmarks per detected hand. Wrist and palm landmarks position each glove;
 joint triplets bend each finger. Thumb–index distance drives a pinch state:
 close to grab the nearest eligible fitting, move to manipulate it, open to
 release. Detection confidence and stale-frame handling prevent accidental
-placements. Mouse and keyboard reproduce the same input actions for demos and
-accessibility when a camera is unavailable.
+placements. Learner sessions require the camera plus a completed neutral
+calibration before the tutorial and start-simulation flow unlock. Keyboard,
+pointer and scripted input exist only as a silent automated-QA channel
+(`?qa=1` or `navigator.webdriver`) that reuses the same interaction checks;
+it is never offered in the learner interface.
 
 The bench contains usable pipe sections and purpose-driven tools: a P-trap and
 slip nuts for assembly, elbows/tees/couplings for route selection, an adjustable

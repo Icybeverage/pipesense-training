@@ -45,10 +45,10 @@
         <div class="stage-copy">
           <span class="stage-kicker">01 · Calibrate</span>
           <h3 id="setup-title">Put your hands in the workspace</h3>
-          <p>Use your camera for natural hand and finger control. Hold both hands at chest height, then pinch your thumb and index finger once.</p>
+          <p>Your real hands drive the simulation: all 21 landmarks per hand articulate the glove joints, and a thumb–index pinch grabs tools and fittings. Enable the camera and hold both hands steady — the tutorial unlocks once your neutral pose is calibrated.</p>
           <div class="tracking-readout" id="tracking-readout" data-state="idle">
             <span class="tracking-dot"></span>
-            <div><strong id="tracking-title">Camera not connected</strong><small id="tracking-detail">The gloves remain available with mouse controls.</small></div>
+            <div><strong id="tracking-title">Camera required — not connected</strong><small id="tracking-detail">Enable the camera — all 21 landmarks per hand map to the articulated glove joints; pinch thumb to index to grab tools.</small></div>
           </div>
           <div class="stage-actions">
             <button class="btn primary" id="btn-setup-camera" type="button">Enable hand tracking</button>
@@ -57,10 +57,10 @@
         </div>
         <div class="calibration-visual" aria-hidden="true">
           <div class="scan-frame"><span></span><span></span><span></span><span></span></div>
-          <div class="hand-readout left"><b>LEFT</b><em>21 joints</em></div>
-          <div class="hand-readout right"><b>RIGHT</b><em>21 joints</em></div>
+          <div class="hand-readout left"><b>LEFT</b><em>21 landmarks</em></div>
+          <div class="hand-readout right"><b>RIGHT</b><em>21 landmarks</em></div>
           <div class="scan-line"></div>
-          <p>Raise hands · palms facing camera</p>
+          <p>Hold both hands steady to calibrate</p>
         </div>
       </section>
 
@@ -133,7 +133,7 @@
       <h2>W&amp;B turns each plumbing attempt into a better next attempt</h2>
       <button class="btn ghost" id="btn-story-close" type="button">Close</button>
     </header>
-    <p class="story-intro">PipeSense keeps task correctness deterministic, then uses W&amp;B to observe the failure, generate concise coaching, apply a different training intervention, and measure whether the retry improved.</p>
+    <p class="story-intro">PipeSense is workforce training before entering the workforce: MediaPipe hand telemetry drives virtual gloves, deterministic plumbing scoring judges correctness, W&amp;B Weave + W&amp;B Inference adapt coaching between attempts, and ElevenLabs Live Maya delivers opt-in voice guidance.</p>
 
     <section class="story-loop" aria-label="Observe Coach Adapt Retry Evaluate">
       <div class="loop-stage"><b>Observe</b><span>Geometry + sequence telemetry captured</span></div>
@@ -145,6 +145,16 @@
       <div class="loop-stage"><b>Retry</b><span>Simulation changes before the next run</span></div>
       <div class="loop-arrow">→</div>
       <div class="loop-stage"><b>Evaluate</b><span>Score delta compared in Weave</span></div>
+    </section>
+
+    <section class="story-sec">
+      <h3>Full shipped stack</h3>
+      <ul>
+        <li>MediaPipe hand telemetry (21 landmarks per hand) drives articulated virtual glove motion and thumb-index pinch grabs.</li>
+        <li>Deterministic browser simulation scores sequence, alignment, tightening, leaks, retained water, and sewer-gas seal.</li>
+        <li>W&amp;B Weave traces the attempt loop while W&amp;B Inference rewrites coaching language and intervention suggestions.</li>
+        <li>ElevenLabs Live powers Maya as an opt-in coach, with captions/text fallback when voice is off or unavailable.</li>
+      </ul>
     </section>
 
     <section class="story-sec">

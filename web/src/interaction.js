@@ -1,7 +1,8 @@
 // PipeSense interaction layer: turns smoothed hand poses into simulated
-// actions. Every input source (camera, pointer, keyboard) reaches the
-// deterministic core through this one path, so a state change always requires
-// a gloved hand holding the right thing at the right target.
+// actions. Every input source (camera for learners; the scripted QA channel
+// in automated sessions) reaches the deterministic core through this one
+// path, so a state change always requires a gloved hand holding the right
+// thing at the right target.
 
 import * as THREE from 'three';
 import { GEOM, grab, release, moveCarried, rotate } from './sim.js';

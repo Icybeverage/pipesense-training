@@ -21,18 +21,19 @@ failure case so the retry loop can be observed honestly.
 Deliver calmly and evenly. Do not rush. Let the workshop audio and the water
 test carry the pauses.
 
-> On a real job, one bad trap install means callbacks, leaks, and sewer-gas
-> risk. PipeSense lets learners practice the P-trap in a first-person workshop
-> before touching live plumbing. The learner assembles the trap with glove
-> control, then runs water. Correctness comes from a deterministic geometry
-> check, not the model. In this run, attempt one is baseline score zero with a
-> connection gap. Weave tracing is active, and W&B Inference is used to rewrite
-> the coaching I speak. The selected intervention is change_modality_visual, so
-> the retry shows a visual alignment cue and ghost target. The learner reseats
-> both joints, reruns water, and the result is complete: score one hundred,
-> water retained, sewer gas blocked. Because that improved, the strategy is kept
-> for the next run. That is the loop: observe, coach, adapt, retry, evaluate,
-> with evidence on screen.
+> PipeSense uses MediaPipe-controlled virtual hands, deterministic simulation,
+> W&B Weave, and adaptive Maya voice coaching to let tradespeople practise real
+> procedures safely before entering the workforce. On a real job, one bad trap
+> install means callbacks, leaks, and sewer-gas risk. Here, both hands and every
+> finger drive articulated virtual gloves; pinch to grab a fitting and roll the
+> wrist to seat it. Correctness comes from deterministic geometry, not the
+> model. Attempt one scores zero with a connection gap. Weave traces the attempt,
+> and W&B Inference rewrites the coaching I speak. The selected visual
+> intervention changes the retry with an alignment cue and ghost target. The
+> learner reseats both joints and reruns water. The result is score one hundred,
+> water retained, and sewer gas blocked. Because performance improved, the
+> strategy is kept. That is the loop: observe, coach, adapt, retry, evaluate—with
+> the complete shipped stack and evidence on screen.
 
 Word count is 160, which reads at 55–65 seconds at a measured pace.
 
@@ -130,8 +131,9 @@ Word count is 160, which reads at 55–65 seconds at a measured pace.
   and voice configured. Record a second silent pass with captions as backup.
 - **Prize targeting, for the submission text (not the narration).** Best Loop
   Design: the adapt→retry arrow is the product. Best Use of Weave: one trace
-  per attempt cycle with nested operations. Most Production-Ready: camera
-  optional, deterministic core, honest evidence drawer, graceful degradation.
+  per attempt cycle with nested operations. Most Production-Ready:
+  camera-gated learner flow with mandatory hand calibration, deterministic
+  core, honest evidence drawer, graceful degradation.
 - **Team note (not for narration).** Qoder implemented the web simulation and
   the backend loop; Cursor reviewed and fixed the backend, then the frontend
   after Qoder's pass.

@@ -10,18 +10,19 @@ PipeSense
 ## Tagline
 
 First-person plumbing practice whose coach adapts after every attempt.
+PipeSense uses MediaPipe-controlled virtual hands, deterministic simulation, W&B Weave and adaptive Maya voice coaching to let tradespeople practise real procedures safely before entering the workforce.
 
 ## Short description (100 words)
 
 PipeSense is a first-person plumbing training simulation. The demo lesson builds
 a P-trap under a sink with two-hand MediaPipe tracking that maps each finger
-onto articulated virtual work gloves; mouse and keyboard are a full fallback. A
-deterministic scorer checks sequence, alignment, tightness, leaks, retained
-water, and the sewer-gas seal; the model never decides correctness. After each
-water test, Weave traces observe, coach, adapt, retry, evaluate: W&B Inference
-rewrites the coaching, one selected intervention visibly changes the next
-attempt, and the evaluator compares the new score with the baseline. Verified
-run: score 0 to 100 with gas blocked.
+onto articulated virtual work gloves, and the tutorial unlocks only after
+neutral hand calibration. A deterministic scorer checks sequence, alignment,
+tightness, leaks, retained water, and the sewer-gas seal; the model never
+decides correctness. After each water test, Weave traces observe, coach, adapt,
+retry, evaluate: W&B Inference rewrites the coaching, one selected intervention
+visibly changes the next attempt, and the evaluator compares the new score with
+the baseline. Verified run: score 0 to 100 with gas blocked.
 
 ## Problem
 
@@ -36,12 +37,13 @@ PipeSense is a first-person browser simulation for professional plumbing
 practice. In the demo lesson (Build a P-Trap), the learner calibrates their
 hands, reviews five visual procedure cards, then installs the trap using
 articulated virtual work gloves driven by MediaPipe's 21 landmarks per hand.
-Mouse and keyboard provide a complete fallback when no camera is available, and
-both paths go through the same interaction checks. Correctness is owned by a
-deterministic scorer: sequence, alignment, joint tightness, leaks, retained
-water, and the sewer-gas seal. The model never decides whether pipe geometry is
-valid. Each attempt ends in a water test, and a successful trap visibly holds
-water and blocks sewer gas.
+Learner sessions require the camera: the tutorial and simulation stay locked
+until both hands are tracked and the neutral pose is calibrated, so every
+manipulation comes from the learner's real hands through the gloves.
+Correctness is owned by a deterministic scorer: sequence, alignment, joint
+tightness, leaks, retained water, and the sewer-gas seal. The model never
+decides whether pipe geometry is valid. Each attempt ends in a water test, and
+a successful trap visibly holds water and blocks sewer gas.
 
 ## Loop design (Observe → Coach → Adapt → Retry → Evaluate)
 
@@ -90,17 +92,20 @@ the trace recorded.
 
 ## Demo steps for judges
 
-1. Open <https://pipesense-training.vercel.app>. Camera is optional; choose
-   mouse/keyboard to skip calibration if no webcam is available.
-2. Calibrate hands (or continue with the keyboard/mouse path).
+1. Open <https://pipesense-training.vercel.app>. A webcam is required: the
+   lesson is driven by the learner's real hands, so the setup stage starts by
+   asking for the camera.
+2. Enable the camera and hold both hands steady; the tutorial unlocks once the
+   neutral pose is calibrated.
 3. Review the five visual procedure cards.
 4. Install the P-trap with the gloves; seat both joints with the wrench.
 5. Run the water test and read the loop card: issue, score, intervention,
    verdict.
 6. Open the judge evidence drawer for the inference provider, trace status, and
    attempt history.
-7. Optional: open **More** and enter `run` to replay the automated lesson. It
-   uses the same glove interaction path and cannot bypass simulation checks.
+7. Automated QA sessions (`?qa=1`/webdriver) replay the full lesson through the
+   same glove interaction path, silently and without altering simulation
+   checks; they are not part of the learner or judge-facing flow.
 
 ## Target tracks
 
@@ -112,11 +117,11 @@ the trace recorded.
   (`pipesense/attempt-loop`) with nested observer, coach, inference, and
   evaluator operations; trace status and attempt history are visible in the app
   during the demo.
-- **Most Production-Ready** — Camera optional with a full mouse/keyboard
-  fallback; deterministic scoring separated from the LLM; offline coaching
-  keeps the demo alive without network; the judge drawer labels live backend
-  evidence versus local fallback honestly; deployed and smoke-tested end to
-  end.
+- **Most Production-Ready** — Camera-gated learner flow with mandatory neutral
+  hand calibration; deterministic scoring separated from the LLM; offline
+  coaching keeps the demo alive without network; the judge drawer labels live
+  backend evidence versus local fallback honestly; deployed and smoke-tested
+  end to end.
 - **Best Social Media Demo** — The public 62-second H.264/AAC cut has Maya's
   conversational narration, a visible failure-to-success arc, and a final W&B
   evidence frame that makes the sponsor integration legible without extra
@@ -128,6 +133,8 @@ the trace recorded.
 - Repository: <https://github.com/Icybeverage/pipesense-training>
 - Narrated demo (Maya, 62 s):
   <https://pipesense-training.vercel.app/submission/pipesense-demo-maya.mp4>
+- Dropbox demo:
+  <https://www.dropbox.com/scl/fi/um50jd83usutpjpi5lnp8/PipeSense-Maya-Demo.mp4?rlkey=t1zondfw6u4p44hjxwxfts2lm&dl=0>
 - Silent backup:
   <https://pipesense-training.vercel.app/submission/pipesense-demo-silent.mp4>
 - W&B presentation page:

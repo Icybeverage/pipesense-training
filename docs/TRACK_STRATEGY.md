@@ -12,8 +12,9 @@
    live provider, project, attempt history, intervention and score delta.
 3. **Most Production-Ready** — strong supporting track. The browser simulation
    is deployed with server-side secrets, deterministic scoring, live-service
-   status, graceful offline coaching, an opt-in voice agent and a complete
-   mouse/keyboard fallback for camera issues.
+   status, graceful offline coaching, an opt-in voice agent and a
+   camera-gated learner flow (webcam plus neutral calibration before the
+   tutorial unlocks; scripted input stays a silent QA-only channel).
 4. **Best Social Media Demo** — strong supporting track. The public 62-second
    H.264/AAC demo has conversational Maya narration, a clear failure-to-success
    arc and ends on the W&B proof page.

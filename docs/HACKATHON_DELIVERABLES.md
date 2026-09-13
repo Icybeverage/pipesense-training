@@ -26,7 +26,12 @@ session. Public event: <https://luma.com/coreweavehacks>.
   adjustable wrench, valve, water, leak, and sewer-gas outcome.
 - [x] MediaPipe Hand Landmarker input with 21 landmarks per hand, per-finger
   articulation, pinch grab/release, and wrist-roll rotation.
-- [x] Mouse and keyboard fallback through the same interaction checks.
+- [x] Camera and neutral hand calibration required before the tutorial and
+  start-simulation flow unlock; no keyboard/mouse control is offered to
+  learners.
+- [x] Silent automated-QA channel (`?qa=1`/webdriver) reuses the same
+  interaction checks so end-to-end tests remain possible without being
+  advertised.
 - [x] A staged learner journey: hand calibration, visual procedure cards,
   guided performance, outcome, and retry.
 - [x] Deterministic scoring for sequence, alignment, tightness, leaks, retained

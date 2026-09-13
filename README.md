@@ -5,6 +5,7 @@ PipeSense is a CoreWeave Hacks project: a first-person, gesture-driven plumbing 
 **Live demo:** <https://pipesense-training.vercel.app>
 
 **Submission assets:** [Maya-narrated demo](https://pipesense-training.vercel.app/submission/pipesense-demo-maya.mp4) ·
+[Dropbox demo](https://www.dropbox.com/scl/fi/um50jd83usutpjpi5lnp8/PipeSense-Maya-Demo.mp4?rlkey=t1zondfw6u4p44hjxwxfts2lm&dl=0) ·
 [silent backup](https://pipesense-training.vercel.app/submission/pipesense-demo-silent.mp4) ·
 [W&B presentation page](https://pipesense-training.vercel.app/submission/wandb-story-slide.png)
 
@@ -19,19 +20,26 @@ cd backend
 
 Open `http://127.0.0.1:8000`. The learner journey is:
 
-1. Calibrate camera-based hand tracking.
+1. Enable the camera and calibrate: hold both hands steady until the neutral
+   pose locks. The tutorial stays locked until calibration completes.
 2. Scroll through the five visual procedure cards.
 3. Perform the lesson with articulated virtual work gloves.
 4. Review the visible W&B loop: Observe → Coach → Adapt → Retry → Evaluate.
 
 Maya connects only after a real user explicitly starts the simulation. Automated QA and `?qa=1` sessions remain silent.
 
-## Browser controls
+## Hand controls (camera required)
 
-- Camera: all 21 MediaPipe hand landmarks drive wrist pose and articulated finger joints; thumb/index pinch grabs, wrist roll turns.
-- Mouse: drag a glove to move and pinch; `Alt`+drag moves without pinching; wheel rotates a held control or tool.
-- Keyboard: `W A S D Q E` controls the left glove, `I J K L U O` the right, `F`/`;` pinches, and `[`/`]` rotates.
-- Demo automation: open **More** and enter `run`. It uses the same glove interaction path and cannot bypass simulation checks.
+- MediaPipe tracks 21 landmarks per hand; every landmark maps to the articulated
+  glove joints, so wrist pose and each finger follow your real hands.
+- Pinch thumb and index to grab a fitting or tool; wrist roll turns the valve,
+  faucet and wrench.
+- Learner sessions are camera-only. The tutorial and start-simulation flow stay
+  locked until the camera sees both hands and the neutral pose is calibrated;
+  the interface never advertises another control path.
+- Automated QA only: `?qa=1` or `navigator.webdriver` sessions may drive the
+  same glove interaction path with scripted input so end-to-end tests remain
+  possible. This channel is silent and is never surfaced in learner sessions.
 
 ## W&B learning loop
 
@@ -81,7 +89,7 @@ cd backend && python3 -m unittest -v test_agents.py
 ## Architecture
 
 ```text
-MediaPipe 21-landmark input / mouse-keyboard fallback
+MediaPipe 21-landmark camera input (learner sessions; QA-only scripted channel)
               ↓
 Articulated Three.js work gloves + tools
               ↓

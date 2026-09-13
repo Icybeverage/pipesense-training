@@ -3,8 +3,10 @@
 // Two sources feed the same interface: every hand exposes a smoothed pose
 // (world target, orientation, finger curls, thumb, pinch) that gloves.js
 // renders and interaction.js consumes. Camera input uses MediaPipe's Hand
-// Landmarker (21 landmarks per hand); pointer and keyboard reproduce the same
-// pose so the demo is fully playable with no camera.
+// Landmarker (21 landmarks per hand). Pointer, keyboard and scripted input
+// reproduce the same pose only in silent automated-QA sessions (?qa=1 or
+// navigator.webdriver); learner sessions accept camera input exclusively and
+// the fallback is never surfaced in the interface.
 //
 // Handedness: the camera frame is NOT mirrored, so MediaPipe's "mirrored
 // input" assumption is inverted here - the label is swapped before use. World
@@ -239,7 +241,7 @@ function landmarkPose(points) {
   };
 }
 
-export function createInput({ canvas, video, onStatus }) {
+export function createInput({ canvas, video, onStatus, automated = false }) {
   const hands = { left: createHandState('left'), right: createHandState('right') };
   const calibrator = createNeutralCalibration();
   const keys = new Set();
@@ -298,6 +300,9 @@ export function createInput({ canvas, video, onStatus }) {
   }
 
   function inputMode() {
+    // Learner sessions are camera-only, so an active session always reports
+    // 'camera'; the QA channel keeps the mixed-source classification.
+    if (!automated) return camera.active ? 'camera' : 'keyboard_mouse';
     if (!camera.active || cameraFrames === 0) return 'keyboard_mouse';
     if (fallbackFrames === 0) return 'camera';
     const ratio = cameraFrames / (cameraFrames + fallbackFrames);
@@ -306,7 +311,7 @@ export function createInput({ canvas, video, onStatus }) {
     return 'mixed';
   }
 
-  // ------------------------------------------------------ pointer fallback
+  // ------------------------------------------- pointer/keyboard QA channel
   function toWorldFromPointer(clientX, clientY) {
     const rect = canvas.getBoundingClientRect();
     const nx = (clientX - rect.left) / rect.width;
@@ -329,6 +334,7 @@ export function createInput({ canvas, video, onStatus }) {
   }
 
   function onPointerDown(event) {
+    if (!automated) return;
     if (event.button !== 0 && event.button !== 1) return;
     const p = toWorldFromPointer(event.clientX, event.clientY);
     const hand = pickHand(p);
@@ -339,6 +345,7 @@ export function createInput({ canvas, video, onStatus }) {
   }
 
   function onPointerMove(event) {
+    if (!automated) return;
     const side = drags.get(event.pointerId);
     if (!side) return;
     const hand = hands[side];
@@ -349,6 +356,7 @@ export function createInput({ canvas, video, onStatus }) {
   }
 
   function onPointerUp(event) {
+    if (!automated) return;
     if (!drags.has(event.pointerId)) return;
     const side = drags.get(event.pointerId);
     drags.delete(event.pointerId);
@@ -357,11 +365,13 @@ export function createInput({ canvas, video, onStatus }) {
   }
 
   function onWheel(event) {
+    if (!automated) return;
     wheelDelta += event.deltaY;
     event.preventDefault();
   }
 
   function onKeyDown(event) {
+    if (!automated) return;
     if (event.metaKey || event.ctrlKey || event.altKey) return;
     const target = event.target;
     if (target instanceof HTMLElement && target.closest('input, textarea, select')) return;
@@ -703,7 +713,7 @@ export function createInput({ canvas, video, onStatus }) {
         calibrator.invalidate(side);
       }
     }
-    applyFallback(dt);
+    if (automated) applyFallback(dt);
     const anyCamera = applyCameraFrame(dt);
     if (anyCamera) cameraFrames += 1;
     else fallbackFrames += 1;
@@ -755,7 +765,7 @@ export function createInput({ canvas, video, onStatus }) {
     cameraState: camera,
     inputMode,
     keys,
-    // Macros drive the same pinch/curl state the pointer fallback uses, so
+    // Macros drive the same pinch/curl state the pointer QA channel uses, so
     // scripted commands cannot bypass the hand-target interaction checks.
     forcePinch(side, value) {
       const hand = hands[side];

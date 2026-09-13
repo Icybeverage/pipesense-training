@@ -8,8 +8,11 @@
 // local fallback) explains and adapts the coaching, and the chosen strategy
 // visibly changes the next attempt (ghost, snap assist, step checklist).
 //
-// Every input source — camera, pointer, keyboard and scripted macros — acts
-// on the sim through src/interaction.js, so nothing can skip the checks.
+// Learner sessions are camera-only: the tutorial and simulation unlock once
+// both hands are detected and the neutral pose is calibrated. Pointer,
+// keyboard and scripted macro input exist only as a silent automated-QA
+// channel (?qa=1 or navigator.webdriver) and flow through the same
+// src/interaction.js checks as the camera, so nothing can skip the sim.
 
 import * as THREE from 'three';
 import { createWorld } from './src/world.js';
@@ -106,7 +109,7 @@ const props = createProps(world.scene);
 const gloves = { left: createGlove('left'), right: createGlove('right') };
 world.scene.add(gloves.left.root, gloves.right.root);
 const fx = createFx(world.scene);
-const input = createInput({ canvas, video: $('cam-video'), onStatus: onInputStatus });
+const input = createInput({ canvas, video: $('cam-video'), onStatus: onInputStatus, automated: IS_AUTOMATED_SESSION });
 const interaction = createInteraction({ sim, input, props, onEvent: onSimEvent });
 const voice = createVoice({ onCaption: showCaption, onStatus: onVoiceStatus });
 const guides = createGuides();
@@ -385,6 +388,7 @@ function onSimEvent(event) {
 
 function onInputStatus(status) {
   const cam = status.camera;
+  const gloveFlowReady = cam.active && cam.calibrated && cam.handsSeen >= 2;
   $('cam-wrap').hidden = !cam.active;
   const holdTag = cam.holding > 0 && cam.handsSeen === 0 ? ' · holding pose' : '';
   $('cam-tag').textContent = cam.active
@@ -394,30 +398,41 @@ function onInputStatus(status) {
   $('btn-camera').textContent = cam.active ? 'Camera: on' : 'Camera: off';
   const setupButton = $('btn-setup-camera');
   const tracking = $('tracking-readout');
-  if (setupButton) setupButton.textContent = cam.active ? 'Hand tracking enabled' : 'Enable hand tracking';
+  if (setupButton) {
+    setupButton.textContent = cam.active
+      ? (cam.calibrated ? 'Hands calibrated — camera on' : 'Calibrating — hold both hands')
+      : 'Enable hand tracking';
+  }
+  if (!IS_AUTOMATED_SESSION) {
+    // The learner flow stays locked until the camera sees both hands and the
+    // neutral pose is calibrated; automated QA sessions are never gated.
+    $('btn-tour').disabled = !session.started && !gloveFlowReady;
+    $('btn-go').disabled = !session.started && !gloveFlowReady;
+  }
   if (tracking) {
-    const ready = cam.active && cam.handsSeen > 0;
-    const calibrating = ready && !cam.calibrated;
-    const state = cam.status === 'error' ? 'error' : ready ? (calibrating ? 'searching' : 'ready') : cam.active ? 'searching' : 'idle';
+    const readyHands = cam.active && cam.handsSeen >= 2;
+    const calibrating = cam.active && !cam.calibrated && cam.handsSeen > 0;
+    const state = cam.status === 'error' ? 'error' : readyHands ? (calibrating ? 'searching' : 'ready') : cam.active ? 'searching' : 'idle';
     tracking.dataset.state = state;
     $('tracking-title').textContent = cam.status === 'error' ? 'Camera unavailable'
       : calibrating ? 'Calibrating your neutral pose'
-        : ready ? `${cam.handsSeen} hand${cam.handsSeen === 1 ? '' : 's'} mapped`
-          : cam.active ? 'Looking for your hands' : 'Camera not connected';
+        : readyHands ? '2 hands mapped'
+          : cam.active ? 'Looking for your hands' : 'Camera required — not connected';
     $('tracking-detail').textContent = cam.status === 'error' ? cam.error
-      : calibrating ? `Hold both hands steady — ${Math.round(cam.calibProgress * 100)}%`
-        : ready ? 'Neutral pose set. All 21 landmarks drive the virtual glove joints.'
-          : cam.active ? 'Raise both hands with your palms facing the camera.' : 'The gloves remain available with mouse controls.';
+      : calibrating ? `Hold both hands steady — ${Math.round(cam.calibProgress * 100)}% · calibration unlocks the tutorial`
+        : readyHands ? 'Neutral pose set. All 21 landmarks drive the articulated glove joints; pinch thumb to index to grab tools.'
+          : cam.active ? 'Raise both hands, palms facing the camera — both hands must be tracked before the tutorial can unlock.'
+            : 'Enable the camera — all 21 landmarks per hand map to the articulated glove joints; pinch thumb to index to grab tools.';
   }
   if (cam.calibrated && !session.calibNotified) {
     session.calibNotified = true;
-    toast('Neutral pose calibrated — motion is now mapped relative to your stance.');
+    toast('Neutral pose calibrated — all 21 landmarks of each hand now drive the articulated glove joints; pinch thumb to index to grab a tool.');
   }
   if (!cam.active) session.calibNotified = false;
   if (cam.status === 'error' && cam.error) toast(`Camera unavailable — ${cam.error}`);
   if (cam.active && cam.handsSeen === 0 && !session.handsHinted) {
     session.handsHinted = true;
-    toast('Camera on — hold both hands in frame, or use the keyboard fallback.');
+    toast('Camera on — hold both hands in frame. Each hand\'s 21 landmarks map to the articulated glove joints.');
   }
 }
 
@@ -451,6 +466,13 @@ function toast(text) {
 }
 
 // ---------------------------------------------------------- guided UX flow
+
+function requireGloveFlow() {
+  if (IS_AUTOMATED_SESSION) return true;
+  if (input.cameraState.active && input.calibrationState().ready && input.cameraState.handsSeen >= 2) return true;
+  toast('Hand tracking required — enable the camera, keep both hands in frame, and hold steady until neutral calibration completes.');
+  return false;
+}
 
 function showFlowStage(name) {
   const setup = $('stage-setup');
@@ -877,6 +899,12 @@ const MACROS = {
 };
 
 function startMacro(name) {
+  if (!IS_AUTOMATED_SESSION) {
+    // Scripted glove input exists only for silent automated QA; learner
+    // sessions must drive the gloves with real hands.
+    toast('Autopilot is available only in silent automated QA sessions.');
+    return;
+  }
   if (session.macro.running) { toast('Autopilot already running'); return; }
   const fn = MACROS[name];
   if (!fn) { toast(`Unknown macro: ${name}`); return; }
@@ -1049,9 +1077,11 @@ function runCommand(raw) {
   const arg = (parts[0] || '').toLowerCase();
   const rest = parts.join(' ');
   switch (cmd) {
-    case 'help':
-      toast('Commands: help, status, reset, camera on|off, voice on|off, judge, story, run, valve, seat, tighten tail|wall, water, eval, health, agent connect|disconnect, say <text>, ghost on|off, align on|off, steps on|off');
+    case 'help': {
+      const base = 'Commands: help, status, reset, camera on|off, voice on|off, judge, story, eval, health, agent connect|disconnect, say <text>, ghost on|off, align on|off, steps on|off';
+      toast(IS_AUTOMATED_SESSION ? `${base}, run, valve, seat, tighten tail|wall, water` : base);
       break;
+    }
     case 'status': {
       const r = evaluateSim(sim);
       toast(`score ${r.score} · ${r.primary_issue}/${r.detail} · attempt ${session.attempts} · strategy ${session.strategy.current}`);
@@ -1183,7 +1213,14 @@ function resize() {
 
 function wireUi() {
   renderTutorialDeck();
+  if (!IS_AUTOMATED_SESSION) {
+    // Learner flows start locked: the camera must see both hands and the
+    // neutral pose must calibrate before the tutorial or simulation opens.
+    $('btn-tour').disabled = true;
+    $('btn-go').disabled = true;
+  }
   $('btn-go').addEventListener('click', async () => {
+    if (!session.started && !requireGloveFlow()) return;
     const wasStarted = session.started;
     session.started = true;
     $('intro').hidden = true;
@@ -1202,7 +1239,10 @@ function wireUi() {
     showCaption({ text: opening, attrib: 'coach · text' });
   });
   $('btn-setup-camera').addEventListener('click', () => { input.toggleCamera(); });
-  $('btn-tour').addEventListener('click', () => showFlowStage('tutorial'));
+  $('btn-tour').addEventListener('click', () => {
+    if (!session.started && !requireGloveFlow()) return;
+    showFlowStage('tutorial');
+  });
   $('btn-tour-back').addEventListener('click', () => showFlowStage('setup'));
   $('btn-tour-prev').addEventListener('click', () => setTutorialIndex(session.tutorialIndex - 1));
   $('btn-tour-next').addEventListener('click', () => setTutorialIndex(session.tutorialIndex + 1));
