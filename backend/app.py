@@ -27,6 +27,13 @@ class TelemetrySnapshot(BaseModel):
     events_count: int = Field(default=0, ge=0, le=2000)
     camera_frames_seen: int = Field(default=0, ge=0, le=100000)
     input_mode: Literal["keyboard_mouse", "camera", "mixed"] = "keyboard_mouse"
+    calibrated: bool = False
+    landmarks_peak: int = Field(default=0, ge=0, le=42)
+    two_hand_frames: int = Field(default=0, ge=0, le=100000)
+    mean_tracking_confidence: float = Field(default=0, ge=0, le=1)
+    articulation_events: int = Field(default=0, ge=0, le=10000)
+    grip_events: int = Field(default=0, ge=0, le=10000)
+    contact_samples: int = Field(default=0, ge=0, le=100000)
 
 
 class AttemptRequest(BaseModel):
@@ -44,13 +51,49 @@ class AttemptRequest(BaseModel):
         return round(float(value), 2)
 
 
+def _grade_webcam_tracking(telemetry: TelemetrySnapshot | None) -> dict:
+    """Deterministic, privacy-safe control grade; no images or raw landmarks leave the browser."""
+    if telemetry is None:
+        return {"score": 0, "passed": False, "source": "no_telemetry", "checks": {}}
+    checks = {
+        "real_camera_input": telemetry.input_mode == "camera",
+        "neutral_calibrated": telemetry.calibrated,
+        "all_42_landmarks_seen": telemetry.landmarks_peak == 42,
+        "sustained_two_hand_control": telemetry.two_hand_frames >= 45,
+        "tracking_confidence": telemetry.mean_tracking_confidence >= 0.70,
+        "independent_articulation": telemetry.articulation_events >= 8,
+        "grip_transitions": telemetry.grip_events >= 2,
+        "tool_contact": telemetry.contact_samples >= 10,
+    }
+    weights = {
+        "real_camera_input": 15, "neutral_calibrated": 15, "all_42_landmarks_seen": 15,
+        "sustained_two_hand_control": 20, "tracking_confidence": 15,
+        "independent_articulation": 10, "grip_transitions": 5, "tool_contact": 5,
+    }
+    score = sum(weights[name] for name, passed in checks.items() if passed)
+    return {
+        "score": score,
+        "passed": score >= 70 and checks["real_camera_input"] and checks["neutral_calibrated"],
+        "source": "mediapipe_aggregate_v1",
+        "checks": checks,
+        "metrics": telemetry.model_dump(),
+        "privacy": "aggregate_metrics_only_no_images_or_raw_landmarks",
+    }
+
+
+grade_webcam_tracking = _grade_webcam_tracking
+
+
 def _evaluate(request: AttemptRequest):
     payload = request.model_dump(exclude={"telemetry"})
-    return build_response(Attempt(**payload))
+    response = build_response(Attempt(**payload))
+    response["evidence"]["webcam_tracking"] = grade_webcam_tracking(request.telemetry)
+    return response
 
 
 if weave and os.getenv("PIPESENSE_ENABLE_WEAVE_TRACING", "").strip().lower() in {"1", "true", "yes", "on"} and os.getenv("WANDB_API_KEY"):
     weave.init(os.getenv("WANDB_WEAVE_PROJECT", "pipesense-hackathon"))
+    grade_webcam_tracking = weave.op(name="pipesense/grade-webcam-control")(_grade_webcam_tracking)
     evaluate_attempt = weave.op(name="pipesense/attempt-loop")(_evaluate)
     _tracing_status = {"configured": True, "active": True}
 else:

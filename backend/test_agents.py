@@ -123,6 +123,27 @@ class ApiTests(unittest.TestCase):
         self.assertIn("outcome", body)
         self.assertIn("evidence", body)
         self.assertEqual(body["outcome"]["strategy"], "change_modality_visual")
+        self.assertEqual(body["evidence"]["webcam_tracking"]["score"], 0)
+        self.assertFalse(body["evidence"]["webcam_tracking"]["passed"])
+
+    @patch.dict("os.environ", {}, clear=True)
+    def test_real_webcam_tracking_grade_is_deterministic(self):
+        payload = {
+            "attempt_number": 1, "score": 100, "previous_score": -1,
+            "primary_issue": "none", "elapsed_seconds": 42,
+            "telemetry": {
+                "events_count": 20, "camera_frames_seen": 500, "input_mode": "camera",
+                "calibrated": True, "landmarks_peak": 42, "two_hand_frames": 300,
+                "mean_tracking_confidence": 0.91, "articulation_events": 20,
+                "grip_events": 4, "contact_samples": 35,
+            },
+        }
+        body = self.client.post("/v1/attempts/evaluate", json=payload).json()
+        grade = body["evidence"]["webcam_tracking"]
+        self.assertEqual(grade["score"], 100)
+        self.assertTrue(grade["passed"])
+        self.assertEqual(grade["source"], "mediapipe_aggregate_v1")
+        self.assertEqual(grade["privacy"], "aggregate_metrics_only_no_images_or_raw_landmarks")
 
     @patch.dict("os.environ", {}, clear=True)
     def test_voice_url_reports_unconfigured_without_secrets(self):

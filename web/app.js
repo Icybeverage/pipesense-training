@@ -685,6 +685,7 @@ async function evaluateAttempt(reason, force = false) {
       events_count: sim.traction.events,
       camera_frames_seen: input.cameraFrames(),
       input_mode: input.inputMode(),
+      ...input.trackingTelemetry(),
     },
   });
   session.lastRequest = { reason, payload, sent_at: new Date().toISOString() };
@@ -1050,6 +1051,7 @@ function renderStory() {
     $('story-strategy').textContent = 'No run yet.';
     $('story-inference').textContent = 'No run yet.';
     $('story-weave').textContent = 'No run yet.';
+    $('story-webcam').textContent = 'No run yet.';
     $('story-result').textContent = 'No run yet.';
     $('story-note').textContent = 'Run at least one evaluation to populate real evidence. This panel never fabricates values.';
     return;
@@ -1058,6 +1060,7 @@ function renderStory() {
   const provider = evidence.provider || {};
   const tracing = evidence.tracing || {};
   const score = evidence.deterministic_score || {};
+  const webcam = evidence.webcam_tracking || {};
   const prev = Number.isFinite(score.previous) ? score.previous : latest.previous;
   const curr = Number.isFinite(score.current) ? score.current : latest.score;
   const hasPrev = Number.isFinite(prev) && prev >= 0;
@@ -1072,6 +1075,9 @@ function renderStory() {
   $('story-weave').textContent = tracing.active
     ? `${tracing.project || 'project unknown'} · trace active`
     : `${tracing.project || 'no active project'} · trace inactive`;
+  $('story-webcam').textContent = Number.isFinite(webcam.score)
+    ? `${webcam.score}/100 · ${webcam.passed ? 'verified real-camera control' : 'more tracked practice needed'}`
+    : 'No webcam grade returned.';
   $('story-result').textContent = latest.outcome.improved ? 'improved' : 'did not improve';
   $('story-note').textContent = 'Live run evidence from the most recent evaluated attempt.';
 }

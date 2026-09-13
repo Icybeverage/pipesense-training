@@ -55,6 +55,20 @@ const WORK = GEOM.workspace;
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 const clamp01 = (v) => clamp(v, 0, 1);
 
+function emptyTrackingStats() {
+  return {
+    landmarksPeak: 0,
+    twoHandFrames: 0,
+    confidenceSum: 0,
+    confidenceSamples: 0,
+    articulationEvents: 0,
+    gripEvents: 0,
+    contactSamples: 0,
+    previousGrip: { left: false, right: false },
+    previousPose: { left: null, right: null },
+  };
+}
+
 // One Euro filter: low lag while still, stronger smoothing when moving fast.
 class OneEuro {
   constructor(value, { minCut = 1.6, beta = 0.05, dCut = 1.0 } = {}) {
@@ -267,6 +281,7 @@ export function createInput({ canvas, video, onStatus, automated = false }) {
     lostSince: 0,
     tmp: { x: 0, y: 0, z: 0 },
     debugHands: { left: null, right: null },
+    stats: emptyTrackingStats(),
   };
 
   function status() {
@@ -290,6 +305,7 @@ export function createInput({ canvas, video, onStatus, automated = false }) {
 
   function resetTrackingFidelity() {
     calibrator.reset();
+    camera.stats = emptyTrackingStats();
     lastCalibReport = -1;
     for (const side of ['left', 'right']) {
       const hand = hands[side];
@@ -683,6 +699,28 @@ export function createInput({ canvas, video, onStatus, automated = false }) {
     }
 
     camera.debugHands = debugHands;
+    const trackedCount = Object.values(debugHands).filter(Boolean).length;
+    camera.stats.landmarksPeak = Math.max(camera.stats.landmarksPeak, trackedCount * 21);
+    if (trackedCount === 2) camera.stats.twoHandFrames += 1;
+    for (const side of ['left', 'right']) {
+      const data = debugHands[side];
+      if (!data) continue;
+      camera.stats.confidenceSum += data.confidence;
+      camera.stats.confidenceSamples += 1;
+      if (data.contact > 0.15) camera.stats.contactSamples += 1;
+      const pose = [data.thumb, ...data.curls];
+      const previous = camera.stats.previousPose[side];
+      if (previous && now - previous.at >= 100 && Math.max(...pose.map((v, i) => Math.abs(v - previous.values[i]))) >= 0.12) {
+        camera.stats.articulationEvents += 1;
+        camera.stats.previousPose[side] = { values: pose, at: now };
+      } else if (!previous) {
+        camera.stats.previousPose[side] = { values: pose, at: now };
+      }
+      const powerGrip = data.curls.reduce((sum, value) => sum + value, 0) / data.curls.length >= 0.48 && data.thumb >= 0.24;
+      const gripping = data.pinchClosed || powerGrip;
+      if (gripping && !camera.stats.previousGrip[side]) camera.stats.gripEvents += 1;
+      camera.stats.previousGrip[side] = gripping;
+    }
 
     const outcome = calibrator.sample(dt * 1000, calibFrames);
     if (outcome.justCompleted) {
@@ -805,6 +843,18 @@ export function createInput({ canvas, video, onStatus, automated = false }) {
       if (hand && Number.isFinite(amount)) hand.rotDelta += amount;
     },
     cameraFrames() { return cameraFrames; },
+    trackingTelemetry() {
+      const stats = camera.stats;
+      return {
+        calibrated: calibrator.ready,
+        landmarks_peak: stats.landmarksPeak,
+        two_hand_frames: stats.twoHandFrames,
+        mean_tracking_confidence: stats.confidenceSamples ? stats.confidenceSum / stats.confidenceSamples : 0,
+        articulation_events: stats.articulationEvents,
+        grip_events: stats.gripEvents,
+        contact_samples: stats.contactSamples,
+      };
+    },
     setHighlight(side, value) {
       hands[side].target.highlight = value;
     },

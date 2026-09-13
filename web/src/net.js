@@ -45,6 +45,13 @@ export function buildPayload({ attemptNumber, score, previousScore, primaryIssue
       events_count: Math.min(2000, Math.max(0, Math.round(telemetry.events_count || 0))),
       camera_frames_seen: Math.min(100000, Math.max(0, Math.round(telemetry.camera_frames_seen || 0))),
       input_mode: telemetry.input_mode || 'keyboard_mouse',
+      calibrated: Boolean(telemetry.calibrated),
+      landmarks_peak: Math.min(42, Math.max(0, Math.round(telemetry.landmarks_peak || 0))),
+      two_hand_frames: Math.min(100000, Math.max(0, Math.round(telemetry.two_hand_frames || 0))),
+      mean_tracking_confidence: Math.min(1, Math.max(0, Math.round((telemetry.mean_tracking_confidence || 0) * 1000) / 1000)),
+      articulation_events: Math.min(10000, Math.max(0, Math.round(telemetry.articulation_events || 0))),
+      grip_events: Math.min(10000, Math.max(0, Math.round(telemetry.grip_events || 0))),
+      contact_samples: Math.min(100000, Math.max(0, Math.round(telemetry.contact_samples || 0))),
     };
   }
   return payload;
