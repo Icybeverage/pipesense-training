@@ -22,11 +22,13 @@
 .env
 .env.*
 backend/node_modules/
+node_modules/
 backend/.weave/
 backend/data/
 **/.venv/
 **/__pycache__/
 review/
+tmp/
 web/node_modules/
 supabase/.temp/
 .vercel
