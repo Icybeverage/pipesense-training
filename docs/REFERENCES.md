@@ -10,6 +10,18 @@ A trimmed excerpt of that reference window ships with the hackathon demo as `web
 
 `web/assets/tutorial/step-01.jpg` through `step-05.jpg` are AI-rendered photographic instruction stills produced for this hackathon project with an image-generation model; no third-party stock photography is used. They depict the Build a P-Trap sequence under a sink — closing the supply valve, seating the trap on both sockets, tightening the tail and wall slip nuts with an adjustable wrench, and inspecting after the water test — in a consistent gloved-hands trade style. They are rendered without intentional brand marks, and no TradesQuest or reference-clip artwork is reused.
 
+## Anatomical glove model
+
+The rendered work gloves use the **Rigged Hand** model by **Elena FF**, licensed
+**CC BY-SA 4.0**. The two GLB files (`hand_left.glb`, `hand_right.glb`) are loaded by
+`web/src/gloves.js` through Three's `GLTFLoader` as the primary shell, with the
+procedural rig kept as the interaction fallback. The model is modified at runtime only —
+materials are replaced with PipeSense glove materials, scale is normalised to a 0.20 m
+hand length, and the file's bundled cameras, lights and helpers are stripped; the shipped
+GLB files are unmodified. Attribution, the required verbatim `license.txt` location and
+the share-alike obligation are documented in `web/assets/models/SOURCE.md`; both GLBs
+and the verbatim licence file are vendored beside that note.
+
 ## Curriculum reference
 
 Pre-existing TradesQuest lesson family: **Build a P-Trap**. Concepts used as reference:

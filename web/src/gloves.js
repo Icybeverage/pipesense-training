@@ -15,10 +15,29 @@
 // midpoint, gripAnchor carries the wrench, and `anchors` exposes the palm plus
 // all five fingertips for full-hand contact.
 //
+// The rendered shell is the anatomical "Rigged Hand" skinned model (see
+// web/assets/models/SOURCE.md) loaded asynchronously per side. The procedural
+// rig above stays in the scene graph as the interaction fallback: it is hidden
+// once an anatomical model binds successfully and stays visible when the asset
+// is missing or cannot be mapped. Anchors, pinchAnchor and gripAnchor always
+// ride the procedural skeleton, so the interaction contract is unchanged.
+//
 // root rotation defaults to yaw PI, so an idle glove points into the scene.
 
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+// Anatomical shell. Paths are relative to web/index.html.
+const MODEL_URL = {
+  left: 'assets/models/hand_left.glb',
+  right: 'assets/models/hand_right.glb',
+};
+// Target hand length in metres, matching the procedural rig (palm + fingers).
+const HAND_LENGTH = 0.20;
+// The procedural rig is centred near the palm, not the wrist, so the
+// normalised model is offset to share that centre.
+const MODEL_CENTRE_Z = 0.06;
 
 const PALM = { w: 0.095, t: 0.036, l: 0.112, front: 0.108 };
 const FINGERS = [
@@ -230,6 +249,186 @@ function damp(cur, target, lambda, dt) {
   return target + (cur - target) * Math.exp(-lambda * dt);
 }
 
+// ------------------------------------------------------- anatomical shell
+//
+// The vendored Rigged Hand model is a skinned hand whose bone naming varies by
+// exporter, so fingers are resolved by name alias and ordered by hierarchy
+// depth rather than by a hard-coded index. Only deforming pivot bones are
+// driven: control, IK and terminal (end/tip) bones keep their rest orientation.
+// Rest quaternions are cached once per bone so every frame composes from the
+// bind pose instead of accumulating drift.
+
+const GLOVE_SHELL = new THREE.MeshStandardMaterial({
+  name: 'pipesense-glove-shell',
+  color: 0x225f73,
+  emissive: 0x071c26,
+  emissiveIntensity: 0.22,
+  roughness: 0.94,
+  metalness: 0,
+  envMapIntensity: 0,
+});
+const GLOVE_BACK = new THREE.MeshStandardMaterial({
+  name: 'pipesense-glove-back',
+  color: 0x2e8aa1,
+  emissive: 0x08222d,
+  emissiveIntensity: 0.18,
+  roughness: 0.9,
+  metalness: 0,
+  envMapIntensity: 0,
+});
+const GLOVE_HIVIS = new THREE.MeshStandardMaterial({
+  name: 'pipesense-glove-hivis',
+  color: 0xd97a1f,
+  emissive: 0x3a1500,
+  emissiveIntensity: 0.18,
+  roughness: 0.8,
+  metalness: 0,
+});
+
+const FINGER_ALIAS = [
+  ['thumb', /(thumb|pollex)/i],
+  ['index', /(index|pointer|forefinger)/i],
+  ['middle', /(middle|longfinger)/i],
+  ['ring', /(ring|annular)/i],
+  ['pinky', /(pinky|pinkie|little|minimus)/i],
+];
+const NON_DEFORM_BONE = /(base|end|tip|ik|ctrl|control|pole|target|helper|nub|twist)/i;
+const NUMBERED_DEFORM_BONE = /_(?:0?1|0?2|0?3)(?:\.|_|$)/i;
+const HIVIS_MESH = /(seam|stitch|trim|welt|cuff|band|strap|patch|logo|mark|stripe|hivis|hi-vis)/i;
+const ANATOMY_CURL_MAX = { thumb: [1.1, 1.0, 0.85], finger: [1.35, 1.5, 0.8] };
+
+let gltfLoader = null;
+const handModelCache = new Map();
+
+// Non-sensitive shell state per side, mirrored onto <body data-glove-models>
+// so automated QA can read which shell actually rendered.
+const modelStates = new Map();
+
+function publishModelStates() {
+  if (typeof document === 'undefined' || !document.body) return;
+  const states = [...modelStates.values()];
+  const loaded = states.length === 2 && states.every((state) => state === 'loaded');
+  const failed = states.some((state) => state === 'fallback');
+  document.body.dataset.gloveModels = loaded ? 'loaded' : failed ? 'fallback' : 'loading';
+}
+
+export function gloveModelStatus() {
+  return {
+    left: modelStates.get('left') || 'loading',
+    right: modelStates.get('right') || 'loading',
+  };
+}
+
+function loadHandModel(side) {
+  if (!handModelCache.has(side)) {
+    if (!gltfLoader) gltfLoader = new GLTFLoader();
+    handModelCache.set(side, gltfLoader.loadAsync(MODEL_URL[side]));
+  }
+  return handModelCache.get(side);
+}
+
+function boneDepth(bone) {
+  let depth = 0;
+  for (let node = bone.parent; node; node = node.parent) depth += 1;
+  return depth;
+}
+
+// The GLB carries its own cameras, lights and editor helpers; none of them
+// belong in the workshop scene.
+function stripSceneHelpers(object) {
+  const doomed = [];
+  object.traverse((node) => {
+    if (node.isCamera || node.isLight || /helper/i.test(node.type)) doomed.push(node);
+  });
+  for (const node of doomed) node.removeFromParent();
+}
+
+function dressAnatomy(model) {
+  model.traverse((node) => {
+    if (!node.isMesh) return;
+    node.castShadow = true;
+    node.frustumCulled = false;
+    const original = Array.isArray(node.material) ? node.material : [node.material];
+    const mapped = original.map((mat) => {
+      const label = `${node.name || ''} ${(mat && mat.name) || ''}`;
+      return HIVIS_MESH.test(label) ? GLOVE_HIVIS : (/(back|dorsal)/i.test(label) ? GLOVE_BACK : GLOVE_SHELL);
+    });
+    node.material = Array.isArray(node.material) ? mapped : mapped[0];
+  });
+}
+
+function normaliseAnatomy(model) {
+  const initial = new THREE.Box3().setFromObject(model);
+  const size = initial.getSize(new THREE.Vector3());
+  const length = Math.max(size.x, size.y, size.z);
+  if (!Number.isFinite(length) || length <= 0) return false;
+  model.scale.setScalar(HAND_LENGTH / length);
+  const scaled = new THREE.Box3().setFromObject(model);
+  const centre = scaled.getCenter(new THREE.Vector3());
+  model.position.sub(centre).add(new THREE.Vector3(0, 0, MODEL_CENTRE_Z));
+  return true;
+}
+
+function buildBoneRig(model) {
+  const bones = [];
+  model.traverse((node) => { if (node.isBone) bones.push(node); });
+  const rig = {};
+  for (const [key, alias] of FINGER_ALIAS) {
+    const candidates = bones
+      .filter((bone) => alias.test(bone.name) && !NON_DEFORM_BONE.test(bone.name))
+      .sort((a, b) => boneDepth(a) - boneDepth(b));
+    // The vendored Blender rig exposes deform bones as finger_01/02/03 and
+    // also carries separate base/control/tip chains. Prefer the numbered skin
+    // pivots so a curl never rotates a controller or the whole metacarpal.
+    const numbered = candidates.filter((bone) => NUMBERED_DEFORM_BONE.test(bone.name));
+    const joints = (numbered.length >= 2 ? numbered : candidates).slice(0, 3);
+    if (joints.length) rig[key] = joints;
+  }
+  if (!rig.index && !rig.middle) return null;
+  for (const chain of Object.values(rig)) {
+    for (const bone of chain) {
+      if (!bone.userData.restQuat) bone.userData.restQuat = bone.quaternion.clone();
+    }
+  }
+  return rig;
+}
+
+const BONE_BEND_AXIS = new THREE.Vector3(1, 0, 0);
+const boneBend = new THREE.Quaternion();
+const boneOppose = new THREE.Quaternion();
+const boneEuler = new THREE.Euler();
+
+function poseBone(bone, bend, oppose) {
+  bone.quaternion.copy(bone.userData.restQuat);
+  if (bend) {
+    boneBend.setFromAxisAngle(BONE_BEND_AXIS, bend);
+    bone.quaternion.multiply(boneBend);
+  }
+  if (oppose) {
+    boneOppose.setFromEuler(boneEuler.set(oppose.x, oppose.y, oppose.z, 'YXZ'));
+    bone.quaternion.multiply(boneOppose);
+  }
+}
+
+// `curls` is the damped per-finger closure, `joints` the three MediaPipe bends
+// per finger when the camera supplies them, and `pinch` the damped pinch.
+function driveAnatomy(rig, s, curls, joints, pinch) {
+  for (const key of FINGER_ORDER) {
+    const chain = rig[key];
+    if (!chain) continue;
+    const tracked = key === 'thumb' ? null : joints && joints[FINGER_ORDER.indexOf(key) - 1];
+    const maxima = key === 'thumb' ? ANATOMY_CURL_MAX.thumb : ANATOMY_CURL_MAX.finger;
+    chain.forEach((bone, index) => {
+      const source = tracked && Number.isFinite(tracked[index]) ? tracked[index] : curls[key];
+      const bend = (source || 0) * (maxima[index] ?? maxima[maxima.length - 1]);
+      const oppose = key === 'thumb' && index === 0
+        ? { x: 0.55, y: -0.85 * s * (1 - pinch * 0.35), z: -0.95 * s * (1 - pinch * 0.5) }
+        : null;
+      poseBone(bone, bend, oppose);
+    });
+  }
+}
+
 export function createGlove(side) {
   const s = side === 'right' ? 1 : -1;
   const mats = {
@@ -252,11 +451,19 @@ export function createGlove(side) {
   const root = new THREE.Group();
   root.name = `glove-${side}`;
 
+  // Every procedural mesh lives under this group so the whole shell can be
+  // hidden in one switch once an anatomical model binds. The bone chains and
+  // anchors stay parented to their meshes, so world-space anchor reads and the
+  // interaction contract are unaffected by the swap.
+  const procedural = new THREE.Group();
+  procedural.name = `glove-procedural-${side}`;
+  root.add(procedural);
+
   const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.044, 0.040, 0.082, 24, 3, false), mats.cuff);
   cuff.rotation.x = Math.PI / 2;
   cuff.position.set(0, -0.003, -0.047);
   cuff.castShadow = true;
-  root.add(cuff);
+  procedural.add(cuff);
 
   // ------------------------------------------------------------- palm shell
   // Overlapping masses rather than one box: core block, back-of-hand dome,
@@ -264,40 +471,40 @@ export function createGlove(side) {
   const palm = new THREE.Mesh(new RoundedBoxGeometry(PALM.w, PALM.t, PALM.l, 4, 0.0135), mats.leatherPalm);
   palm.position.set(0, 0, PALM.l / 2 - 0.006);
   palm.castShadow = true;
-  root.add(palm);
+  procedural.add(palm);
 
   const palmDome = new THREE.Mesh(ellipsoid(1, PALM.w * 0.50, PALM.t * 0.66, PALM.l * 0.52), mats.leather);
   palmDome.position.set(0, PALM.t * 0.15, PALM.l * 0.46);
   palmDome.castShadow = true;
-  root.add(palmDome);
+  procedural.add(palmDome);
 
   const knuckleRow = new THREE.Mesh(ellipsoid(1, PALM.w * 0.53, PALM.t * 0.60, 0.020), mats.leather);
   knuckleRow.position.set(0, PALM.t * 0.07, PALM.front - 0.010);
   knuckleRow.castShadow = true;
-  root.add(knuckleRow);
+  procedural.add(knuckleRow);
 
   const wristMass = new THREE.Mesh(ellipsoid(1, PALM.w * 0.45, PALM.t * 0.54, 0.020), mats.leatherPalm);
   wristMass.position.set(0, -0.002, -0.008);
-  root.add(wristMass);
+  procedural.add(wristMass);
 
   // Fuller thenar and hypothenar: these two masses carry the gloved hand's
   // real bulge and blend the thumb base and pinky edge into the palm.
   const thenar = new THREE.Mesh(ellipsoid(1, 0.0235, 0.0150, 0.0325), mats.leatherPalm);
   thenar.position.set(0.0235 * s, -0.0035, 0.047);
   thenar.castShadow = true;
-  root.add(thenar);
+  procedural.add(thenar);
   const hypothenar = new THREE.Mesh(ellipsoid(1, 0.0175, 0.0125, 0.0290), mats.leatherPalm);
   hypothenar.position.set(-0.0285 * s, -0.0035, 0.052);
   hypothenar.castShadow = true;
-  root.add(hypothenar);
+  procedural.add(hypothenar);
 
   const palmPad = new THREE.Mesh(new RoundedBoxGeometry(PALM.w * 0.84, 0.011, PALM.l * 0.68, 3, 0.005), mats.pad);
   palmPad.position.set(0, -PALM.t / 2 - 0.0035, PALM.l * 0.46);
   palmPad.castShadow = true;
-  root.add(palmPad);
+  procedural.add(palmPad);
   const strap = new THREE.Mesh(new RoundedBoxGeometry(PALM.w * 0.86, 0.0105, 0.016, 2, 0.0038), mats.seam);
   strap.position.set(0, PALM.t / 2 + 0.0005, 0.014);
-  root.add(strap);
+  procedural.add(strap);
   // A restrained hi-vis chevron gives judges an immediate hand silhouette
   // without turning the glove into a neon controller prop.
   for (const x of [-0.019, 0.019]) {
@@ -305,7 +512,7 @@ export function createGlove(side) {
     marker.position.set(x, PALM.t / 2 + 0.005, 0.059);
     marker.rotation.y = x * s > 0 ? -0.22 : 0.22;
     marker.castShadow = true;
-    root.add(marker);
+    procedural.add(marker);
   }
 
   // Finger-base webbing: a soft wedge between each adjacent pair of knuckles.
@@ -317,7 +524,7 @@ export function createGlove(side) {
     const web = new THREE.Mesh(ellipsoid(1, Math.abs(a.x - b.x) * 0.66, PALM.t * 0.74, 0.017), mats.leather);
     web.position.set(((a.x + b.x) / 2) * s, 0.001, PALM.front - 0.006);
     web.castShadow = true;
-    root.add(web);
+    procedural.add(web);
   }
 
   // ------------------------------------------------------- articulated chains
@@ -341,7 +548,7 @@ export function createGlove(side) {
     mesh.frustumCulled = false;
     mesh.add(bones[0]);
     mesh.bind(new THREE.Skeleton(bones));
-    root.add(mesh);
+    procedural.add(mesh);
 
     const anchor = new THREE.Object3D();
     anchor.name = `anchor-${key}`;
@@ -409,6 +616,39 @@ export function createGlove(side) {
   halo.rotation.x = Math.PI / 2;
   root.add(halo);
 
+  // ------------------------------------------------- anatomical shell attach
+  // Fire-and-forget: the procedural rig renders until an anatomical model
+  // binds, and stays visible whenever the asset is missing or unmappable.
+  const modelStatus = { state: 'loading', detail: 'procedural fallback active', bones: 0, fingers: 0 };
+  let anatomy = null;
+  modelStates.set(side, modelStatus.state);
+
+  function setModelState(state, detail) {
+    modelStatus.state = state;
+    modelStatus.detail = detail;
+    modelStates.set(side, state);
+    publishModelStates();
+  }
+
+  loadHandModel(side).then((gltf) => {
+    const source = gltf && gltf.scene;
+    if (!source) { setModelState('fallback', 'no scene in model'); return; }
+    stripSceneHelpers(source);
+    const rig = buildBoneRig(source);
+    if (!rig) { setModelState('fallback', 'no mappable finger bones'); return; }
+    if (!normaliseAnatomy(source)) { setModelState('fallback', 'model has no bounds'); return; }
+    dressAnatomy(source);
+    source.name = `glove-anatomy-${side}`;
+    root.add(source);
+    anatomy = rig;
+    procedural.visible = false;
+    modelStatus.bones = Object.values(rig).reduce((n, chain) => n + chain.length, 0);
+    modelStatus.fingers = Object.keys(rig).length;
+    setModelState('loaded', `${modelStatus.fingers} fingers · ${modelStatus.bones} deform bones`);
+  }).catch(() => {
+    setModelState('fallback', 'model load failed');
+  });
+
   const pose = { yaw: Math.PI, pitch: -0.18, roll: 0 };
   const curled = { fingers: [0, 0, 0, 0], thumb: 0, pinch: 0, highlight: 0, contact: 0 };
   const tipA = new THREE.Vector3();
@@ -454,6 +694,18 @@ export function createGlove(side) {
       joint.rotation.x = curled.thumb * (1.15 - ji * 0.15);
       joint.rotation.z = -0.12 * s * pinch;
     });
+
+    // The anatomical shell is driven from the same damped pose, so it follows
+    // the tracked hand with the rig's own bone names and rest poses.
+    if (anatomy) {
+      driveAnatomy(anatomy, s, {
+        thumb: curled.thumb,
+        index: curled.fingers[0],
+        middle: curled.fingers[1],
+        ring: curled.fingers[2],
+        pinky: curled.fingers[3],
+      }, target && target.joints, pinch);
+    }
 
     // Centre the carried tool inside the supported hand volume. All five
     // fingertip landmarks plus the palm contribute, so a wrench or fitting
@@ -518,6 +770,9 @@ export function createGlove(side) {
       const i = FINGER_ORDER.indexOf(key) - 1;
       return i >= 0 ? curled.fingers[i] : 0;
     },
+    // 'loading' | 'loaded' | 'fallback' for the rendered shell, plus the
+    // mapped bone count. Never exposes asset URLs or credentials.
+    get modelStatus() { return { ...modelStatus }; },
     setContactAnchor(node) { contactAnchor = node || null; },
     get contact() { return curled.contact; },
   };

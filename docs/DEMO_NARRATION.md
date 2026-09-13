@@ -22,13 +22,13 @@ Deliver calmly and evenly. Do not rush. Let the workshop audio and the water
 test carry the pauses.
 
 > PipeSense uses MediaPipe-controlled virtual hands, deterministic simulation,
-> W&B Weave, and adaptive Maya voice coaching to let tradespeople practise real
+> Weights and Biases Weave, and adaptive Maya voice coaching to let tradespeople practise real
 > procedures safely before entering the workforce. On a real job, one bad trap
 > install means callbacks, leaks, and sewer-gas risk. Here, both hands and every
 > finger drive articulated virtual gloves; pinch to grab a fitting and roll the
 > wrist to seat it. Correctness comes from deterministic geometry, not the
 > model. Attempt one scores zero with a connection gap. Weave traces the attempt,
-> and W&B Inference rewrites the coaching I speak. The selected visual
+> and Weights and Biases Inference rewrites the coaching I speak. The selected visual
 > intervention changes the retry with an alignment cue and ghost target. The
 > learner reseats both joints and reruns water. The result is score one hundred,
 > water retained, and sewer gas blocked. Because performance improved, the
@@ -70,16 +70,16 @@ Word count is 160, which reads at 55–65 seconds at a measured pace.
   alignment, tightness, water left in the trap. The first attempt stops short
   of the wall arm, and the deterministic check names the connection gap."
 
-### 0:30–0:40 — W&B observes, Maya coaches
+### 0:30–0:40 — Weights & Biases observes, Maya coaches
 
-- **Shot:** Open the W&B story panel: the loop strip Observe → Coach → Adapt →
+- **Shot:** Open the Weights & Biases story panel: the loop strip Observe → Coach → Adapt →
   Retry → Evaluate with the traced run. Then adjust the workspace so the live
   coaching caption and Maya's voice read as the same moment. Flash the judge
   drawer long enough to see inference "used", the model name and the Weave
   project — do not dwell on raw JSON.
 - **On screen:** Coach line from the backend response; judge evidence showing
   provider and trace.
-- **Say:** "W&B Weave has already recorded the attempt, and I speak the
+- **Say:** "Weights & Biases Weave has already recorded the attempt, and I speak the
   coaching it returns."
 
 ### 0:40–0:52 — Retry, visibly different
@@ -120,7 +120,7 @@ Word count is 160, which reads at 55–65 seconds at a measured pace.
   session, coaching degrades to captions and browser speech, and the judge
   drawer labels the local fallback honestly. Do not present a configured
   endpoint as a live integration; read the drawer.
-- **Deterministic boundary.** W&B Inference rewrites coaching language only.
+- **Deterministic boundary.** Weights & Biases Inference rewrites coaching language only.
   It cannot alter the score or declare a fitting correct. If asked on stage,
   point at the score value before and after inference in the judge drawer.
 - **Recorded QA evidence locked for this cut.** Baseline score `0`, retry score

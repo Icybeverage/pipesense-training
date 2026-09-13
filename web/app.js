@@ -17,13 +17,14 @@
 import * as THREE from 'three';
 import { createWorld } from './src/world.js';
 import { createProps, trapCurvePoints } from './src/props.js';
-import { createGlove } from './src/gloves.js';
+import { createGlove, gloveModelStatus } from './src/gloves.js';
 import { createFx } from './src/fx.js';
 import { createInput } from './src/input.js';
 import { createInteraction } from './src/interaction.js';
 import { createSim, resetSim, advance, evaluate as evaluateSim, GEOM, TUNE } from './src/sim.js';
 import { BACKEND_BASE, BACKEND_COOLDOWN_MS, buildPayload, getHealth, offlineCoaching, postEvaluate } from './src/net.js';
 import { createVoice } from './src/voice.js';
+import { buildStoryModel } from './src/story.js';
 
 const $ = (id) => document.getElementById(id);
 const URL_PARAMS = new URLSearchParams(location.search);
@@ -506,7 +507,20 @@ function onSimEvent(event) {
   }
 }
 
+// The live preview is one node that moves between two slots: docked inside the
+// setup slide's reference frame while the intro is open, and floating in the
+// bottom-right HUD slot during the simulation. Keeping it in a single place in
+// the DOM guarantees it can never overlap the lesson copy.
+function syncCamPreviewHome() {
+  const cam = $('cam-wrap');
+  const clip = document.querySelector('.reference-clip');
+  if (!cam || !clip || !$('intro')) return;
+  const target = $('intro').hidden ? document.body : clip;
+  if (cam.parentElement !== target) target.append(cam);
+}
+
 function onInputStatus(status) {
+  syncCamPreviewHome();
   const cam = status.camera;
   const practice = input.practiceActive;
   const gloveFlowReady = cam.active && cam.calibrated && cam.handsSeen >= 2;
@@ -766,7 +780,7 @@ async function evaluateAttempt(reason, force = false) {
   session.lastKey = key;
   session.inFlight = true;
   session.attempts += 1;
-  setLoopPhase('observe', `Attempt ${session.attempts}: reading hand, sequence and seal telemetry…`, 'W&B · tracing');
+  setLoopPhase('observe', `Attempt ${session.attempts}: reading hand, sequence and seal telemetry…`, 'Weights & Biases · tracing');
 
   const payload = buildPayload({
     attemptNumber: session.attempts,
@@ -800,7 +814,7 @@ async function evaluateAttempt(reason, force = false) {
   if (http.ok && http.data.evidence && http.data.evidence.webcam_tracking) {
     session.webcamGrade = http.data.evidence.webcam_tracking;
   }
-  setLoopPhase('coach', outcome.coach, http.ok ? 'W&B · Weave live' : 'Local fallback');
+  setLoopPhase('coach', outcome.coach, http.ok ? 'Weights & Biases · Weave live' : 'Local fallback');
 
   session.lastResponse = {
     source,
@@ -814,7 +828,7 @@ async function evaluateAttempt(reason, force = false) {
   const decided = chooseStrategy(outcome.strategy, improved);
   session.strategy = { current: decided.strategy, verdict: decided.verdict };
   applyIntervention(decided.strategy);
-  setLoopPhase('adapt', `${STRATEGY_LABEL[decided.strategy] || decided.strategy}. Retry to measure the change.`, http.ok ? 'W&B · Weave live' : 'Local fallback');
+  setLoopPhase('adapt', `${STRATEGY_LABEL[decided.strategy] || decided.strategy}. Retry to measure the change.`, http.ok ? 'Weights & Biases · Weave live' : 'Local fallback');
   session.previousScore = result.score;
 
   session.evalHistory.push({
@@ -859,7 +873,7 @@ async function evaluateAttempt(reason, force = false) {
   renderAttempts();
   renderStory();
   renderJudge();
-  setLoopPhase('evaluate', outcome.evaluator, http.ok ? 'W&B · Weave traced' : 'Local fallback');
+  setLoopPhase('evaluate', outcome.evaluator, http.ok ? 'Weights & Biases · Weave traced' : 'Local fallback');
   session.inFlight = false;
 }
 
@@ -877,7 +891,7 @@ function retryLesson() {
   session.lastKey = '';
   const assist = { ...sim.assist };
   dialogReset(assist);
-  setLoopPhase('retry', `Attempt ${session.attempts + 1}: intervention active. Your next score will be compared with ${Math.max(0, session.previousScore)}.`, 'W&B · comparison armed');
+  setLoopPhase('retry', `Attempt ${session.attempts + 1}: intervention active. Your next score will be compared with ${Math.max(0, session.previousScore)}.`, 'Weights & Biases · comparison armed');
   if (!IS_AUTOMATED_SESSION) {
     voice.speak({
       text: 'Workspace reset. Start again from the supply valve — I will compare the score with the last run.',
@@ -1089,6 +1103,7 @@ function startMacro(name) {
   }
   session.started = true;
   $('intro').hidden = true;
+  syncCamPreviewHome();
   $('practice-card').hidden = false;
   $('loop-card').hidden = false;
   session.macro = { name, running: true, cancelled: false };
@@ -1145,58 +1160,28 @@ function renderAttempts() {
 
 function renderStory() {
   if ($('story').hidden) return;
-  const latest = session.evalHistory.length ? session.evalHistory[session.evalHistory.length - 1] : null;
-  if (!latest || !latest.response || !latest.response.outcome) {
-    $('story-attempt').textContent = 'No run yet.';
-    $('story-issue').textContent = 'No run yet.';
-    $('story-score').textContent = 'No run yet.';
-    $('story-strategy').textContent = 'No run yet.';
-    $('story-inference').textContent = 'No run yet.';
-    $('story-weave').textContent = 'No run yet.';
-    $('story-mode').textContent = session.guidedPractice
-      ? 'Guided practice · simulated hands · not certification'
-      : 'Camera · certifying path';
-    $('story-webcam').textContent = 'No run yet.';
-    $('story-result').textContent = 'No run yet.';
-    $('story-note').textContent = 'Run at least one evaluation to populate real evidence. This panel never fabricates values.';
-    return;
+  const view = buildStoryModel(session);
+  const set = (id, text) => { const el = $(id); if (el && el.textContent !== text) el.textContent = text; };
+  const dot = (id, tone) => { const el = $(id); if (el && el.dataset.dot !== tone) el.dataset.dot = tone; };
+  set('story-score', view.score);
+  set('story-issue', view.issue);
+  set('story-strategy', view.intervention);
+  set('story-inference', view.provider);
+  dot('story-inference', view.providerTone);
+  set('story-weave', view.weave);
+  dot('story-weave', view.weaveActive ? 'ok' : 'muted');
+  set('story-input', view.input);
+  set('story-webcam', view.camera);
+  dot('story-webcam', view.cameraTone);
+  set('story-result', view.result);
+  const badge = $('story-certification');
+  if (badge) {
+    if (badge.textContent !== view.certification) badge.textContent = view.certification;
+    if (badge.dataset.tone !== view.certificationTone) badge.dataset.tone = view.certificationTone;
   }
-  const evidence = latest.response.evidence || {};
-  const provider = evidence.provider || {};
-  const tracing = evidence.tracing || {};
-  const score = evidence.deterministic_score || {};
-  const webcam = evidence.webcam_tracking || {};
-  // Preserve the non-certification boundary even if the backend is offline and
-  // the local evaluator has no webcam evidence object to return.
-  const synthetic = latest.input_mode === 'synthetic_practice'
-    || session.guidedPractice
-    || webcam.source === 'synthetic_practice_not_certifiable';
-  const prev = Number.isFinite(score.previous) ? score.previous : latest.previous;
-  const curr = Number.isFinite(score.current) ? score.current : latest.score;
-  const hasPrev = Number.isFinite(prev) && prev >= 0;
-  const delta = hasPrev ? curr - prev : null;
-  $('story-attempt').textContent = String(latest.attempt);
-  $('story-issue').textContent = latest.primary_issue || 'none';
-  $('story-score').textContent = hasPrev ? `${prev} → ${curr} (${delta >= 0 ? '+' : ''}${delta})` : `${curr} (baseline)`;
-  $('story-strategy').textContent = `${latest.strategy || 'none'}${latest.verdict ? ` (${latest.verdict})` : ''}`;
-  const providerName = provider.name || latest.outcome?.provider || 'deterministic-offline';
-  const usage = provider.used ? 'used' : 'fallback';
-  $('story-inference').textContent = `${providerName}; ${usage}`;
-  $('story-weave').textContent = tracing.active
-    ? `${tracing.project || 'project unknown'} · trace active`
-    : `${tracing.project || 'no active project'} · trace inactive`;
-  $('story-webcam').textContent = synthetic
-    ? 'Not certifiable — simulated guided practice, no camera input'
-    : Number.isFinite(webcam.score)
-      ? `${webcam.score}/100 · ${webcam.passed ? 'verified real-camera control' : 'more tracked practice needed'}`
-      : 'No webcam grade returned.';
-  $('story-mode').textContent = synthetic
-    ? 'Guided practice · simulated hands · not certification'
-    : 'Camera · certifying path';
-  $('story-result').textContent = latest.outcome.improved ? 'improved' : 'did not improve';
-  $('story-note').textContent = synthetic
-    ? 'Simulated guided practice. Plumbing score and Weave trace are real; camera-control certification is never earned without a camera.'
-    : 'Live run evidence from the most recent evaluated attempt.';
+  set('story-note', view.synthetic
+    ? 'Simulated guided practice. The plumbing score and any Weave trace are real; camera-control certification is never earned without a camera.'
+    : 'Live evidence from the most recent evaluated attempt. Values the backend did not return are labelled unavailable.');
 }
 
 function renderJudge() {
@@ -1226,6 +1211,7 @@ function renderJudge() {
       synthetic: input.practiceActive
         ? { landmarks: 42, per_hand: 21, source: 'synth.js forward-render of the glove pose' }
         : null,
+      glove_shell: gloveModelStatus(),
     },
     note: 'configured != used; provider evidence comes from the response. Guided practice is never certifiable.',
   }, null, 2);
@@ -1250,7 +1236,7 @@ function renderJudge() {
 async function probeHealth({ notify = true } = {}) {
   const health = await getHealth();
   session.health = health;
-  if (health.ok && health.data?.tracing?.active) $('loop-source').textContent = 'W&B · Weave ready';
+  if (health.ok && health.data?.tracing?.active) $('loop-source').textContent = 'Weights & Biases · Weave ready';
   renderJudge();
   renderStory();
   if (notify) toast(health.ok ? 'Services connected' : 'Services unavailable');
@@ -1451,13 +1437,14 @@ function wireUi() {
     const wasStarted = session.started;
     session.started = true;
     $('intro').hidden = true;
+    syncCamPreviewHome();
     $('practice-card').hidden = false;
     $('loop-card').hidden = false;
     document.querySelectorAll('.flow-progress i').forEach((dot) => dot.classList.add('active'));
     document.querySelector('.flow-progress')?.setAttribute('aria-valuenow', '3');
     canvas.focus();
     renderPracticeCard();
-    setLoopPhase('observe', session.attempts ? 'Continue the coached retry.' : 'Your first attempt becomes the baseline.', session.health?.ok ? 'W&B · Weave ready' : 'Connecting…');
+    setLoopPhase('observe', session.attempts ? 'Continue the coached retry.' : 'Your first attempt becomes the baseline.', session.health?.ok ? 'Weights & Biases · Weave ready' : 'Connecting…');
     if (wasStarted) return;
     const opening = 'Workspace ready. Close the supply valve, seat the trap on both pipe ends, then tighten the slip nuts.';
     if (IS_AUTOMATED_SESSION) {
@@ -1500,6 +1487,7 @@ function wireUi() {
   });
   $('btn-guide').addEventListener('click', () => {
     $('intro').hidden = false;
+    syncCamPreviewHome();
     showFlowStage('tutorial');
     $('btn-go').textContent = 'Return to simulation';
   });
@@ -1548,7 +1536,11 @@ window.PipeSense = {
     sim: () => evaluateSim(sim),
     voice: () => voice.status(),
     input: () => ({ mode: input.inputMode(), frames: input.cameraFrames() }),
+    gloves: () => gloveModelStatus(),
   },
+  // Which glove shell actually rendered per hand: anatomical model or the
+  // procedural fallback. Non-sensitive, for automated QA only.
+  gloveStatus: () => gloveModelStatus(),
 };
 
 // External agents can ask the page to say something (caption + fallback speech).
@@ -1558,6 +1550,7 @@ window.addEventListener('pipesense:agent-say', (event) => {
 });
 
 wireUi();
+syncCamPreviewHome();
 resize();
 renderAttempts();
 renderStory();

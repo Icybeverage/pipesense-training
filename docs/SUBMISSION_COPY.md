@@ -10,7 +10,7 @@ PipeSense
 ## Tagline
 
 First-person plumbing practice whose coach adapts after every attempt.
-PipeSense uses MediaPipe-controlled virtual hands, deterministic simulation, W&B Weave and adaptive Maya voice coaching to let tradespeople practise real procedures safely before entering the workforce.
+PipeSense uses MediaPipe-controlled virtual hands, deterministic simulation, Weights & Biases Weave and adaptive Maya voice coaching to let tradespeople practise real procedures safely before entering the workforce.
 
 ## Short description (100 words)
 
@@ -20,7 +20,7 @@ onto articulated virtual work gloves, and the tutorial unlocks only after
 neutral hand calibration. A deterministic scorer checks sequence, alignment,
 tightness, leaks, retained water, and the sewer-gas seal; the model never
 decides correctness. After each water test, Weave traces observe, coach, adapt,
-retry, evaluate: W&B Inference rewrites the coaching, one selected intervention
+retry, evaluate: Weights & Biases Inference rewrites the coaching, one selected intervention
 visibly changes the next attempt, and the evaluator compares the new score with
 the baseline. Verified run: score 0 to 100 with gas blocked.
 
@@ -49,7 +49,7 @@ a successful trap visibly holds water and blocks sewer gas.
 
 - Observe: structured telemetry plus the deterministic score and primary issue
   (for example, a connection gap).
-- Coach: one concise hint built from the failure evidence. W&B Inference
+- Coach: one concise hint built from the failure evidence. Weights & Biases Inference
   rewrites its language; it cannot change the score.
 - Adapt: the retry policy selects one bounded intervention — visual target with
   ghost, wider kinesthetic snap window, or step-by-step reset — and the
@@ -64,13 +64,13 @@ Verified run: baseline 0 (trap stops short of the wall arm) → intervention
 strategy kept. The loop card and the judge evidence drawer show the same numbers
 the trace recorded.
 
-## How W&B is used
+## How Weights & Biases is used
 
 - Weave traces each attempt as `pipesense/attempt-loop`, with nested observer,
   coach, inference, and evaluator operations in project
   `productmaster-nimbus/pipesense-hackathon`. The app shows trace status and the
   attempt history in a judge evidence drawer.
-- W&B Inference turns structured failure evidence into brief coaching language
+- Weights & Biases Inference turns structured failure evidence into brief coaching language
   (verified run: `openai/gpt-oss-20b`, reported as used). Deterministic scoring
   stays in the browser and inference cannot alter it or declare a fitting
   correct.
@@ -81,13 +81,13 @@ the trace recorded.
 - Browser: Three.js 0.170, MediaPipe Hand Landmarker (21 landmarks per hand,
   pinch grab and wrist-roll rotation), plain ES modules; deterministic
   simulation and scoring in `web/src/sim.js`.
-- Backend: Python FastAPI (`backend/app.py`) with W&B Weave tracing, W&B
+- Backend: Python FastAPI (`backend/app.py`) with Weights & Biases Weave tracing, Weights & Biases
   Inference, and ElevenLabs Live conversational voice (Maya). API keys stay
   server-side; voice is opt-in and silent during automated QA; captions and
   browser speech are the fallback.
 - Deployment: <https://pipesense-training.vercel.app> serves the web demo and
   backend as one Vercel deployment. Smoke-tested in Chromium: one automated
-  lesson completed at score 100 with live W&B Inference and an active Weave
+  lesson completed at score 100 with live Weights & Biases Inference and an active Weave
   trace.
 
 ## Demo steps for judges
@@ -123,7 +123,7 @@ the trace recorded.
   backend evidence versus local fallback honestly; deployed and smoke-tested
   end to end.
 - **Best Social Media Demo** — The public 74-second H.264/AAC cut has Maya's
-  conversational narration, a visible failure-to-success arc, and a final W&B
+  conversational narration, a visible failure-to-success arc, and a final Weights & Biases
   evidence frame that makes the sponsor integration legible without extra
   explanation.
 
@@ -139,7 +139,7 @@ the trace recorded.
   <https://www.dropbox.com/scl/fo/yynqa5zlxgrqmoq635ndq/AG5o4oieY0PHHI2_dET08i4?rlkey=facx72u9oeze37c6qz9tsd63k&dl=0>
 - Silent backup:
   <https://pipesense-training.vercel.app/submission/pipesense-demo-silent.mp4>
-- W&B presentation page:
+- Weights & Biases presentation page:
   <https://pipesense-training.vercel.app/submission/wandb-story-slide.png>
 
 ## Evidence sources

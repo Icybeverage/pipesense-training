@@ -110,7 +110,7 @@
   </section>
 
   <section class="loop-card" id="loop-card" hidden aria-label="Adaptive training loop">
-    <header><span>Learning loop</span><b id="loop-source">W&amp;B ready</b></header>
+    <header><span>Learning loop</span><b id="loop-source">Weights &amp; Biases ready</b></header>
     <div class="loop-track" aria-label="Observe coach adapt retry evaluate">
       <span data-loop="observe">Observe</span><i></i><span data-loop="coach">Coach</span><i></i><span data-loop="adapt">Adapt</span><i></i><span data-loop="retry">Retry</span><i></i><span data-loop="evaluate">Evaluate</span>
     </div>
@@ -125,7 +125,7 @@
     <button class="btn" id="btn-drop" type="button">Release hands</button>
     <details class="more" id="more-tools"><summary class="btn ghost">Views</summary><div class="more-menu">
       <label class="cmd-wrap"><span class="sr-only">Command</span><input class="cmd" id="cmd" type="text" autocomplete="off" spellcheck="false" placeholder="Demo command…" /></label>
-      <button class="btn ghost" id="btn-story" type="button" aria-expanded="false" aria-controls="story">W&amp;B story</button>
+      <button class="btn ghost" id="btn-story" type="button" aria-expanded="false" aria-controls="story">Weights &amp; Biases</button>
       <button class="btn ghost" id="btn-judge" type="button" aria-expanded="false" aria-controls="judge">Judge evidence</button>
     </div></details>
   </footer>
@@ -134,67 +134,44 @@
 
   <p class="practice-banner" id="practice-banner" hidden>Guided practice · simulated hands · not certification</p>
 
-  <aside class="story" id="story" hidden aria-label="W&B Weave presentation story">
-    <header class="story-head">
-      <h2>W&amp;B turns each plumbing attempt into a better next attempt</h2>
+  <aside class="story" id="story" hidden aria-label="Weights &amp; Biases Weave evidence slide">
+    <header class="wb-head">
+      <div class="wb-head-copy">
+        <span class="wb-kicker">Weights &amp; Biases Weave · training loop</span>
+        <h2>Every attempt becomes evidence for the next one</h2>
+      </div>
       <button class="btn ghost" id="btn-story-close" type="button">Close</button>
     </header>
-    <p class="story-intro">PipeSense is workforce training before entering the workforce: MediaPipe hand telemetry drives virtual gloves, deterministic plumbing scoring judges correctness, W&amp;B Weave + W&amp;B Inference adapt coaching between attempts, and ElevenLabs Live Maya delivers opt-in voice guidance.</p>
 
-    <section class="story-loop" aria-label="Observe Coach Adapt Retry Evaluate">
-      <div class="loop-stage"><b>Observe</b><span>Geometry + sequence telemetry captured</span></div>
-      <div class="loop-arrow">→</div>
-      <div class="loop-stage"><b>Coach</b><span>W&amp;B Inference rewrites the hint</span></div>
-      <div class="loop-arrow">→</div>
-      <div class="loop-stage"><b>Adapt</b><span>Strategy selected from bounded options</span></div>
-      <div class="loop-arrow strong">→</div>
-      <div class="loop-stage"><b>Retry</b><span>Simulation changes before the next run</span></div>
-      <div class="loop-arrow">→</div>
-      <div class="loop-stage"><b>Evaluate</b><span>Score delta compared in Weave</span></div>
-    </section>
+    <p class="wb-hero">The browser scores the plumbing deterministically. Weights &amp; Biases Inference rewrites the coaching, the learner retries, and Weave compares the score delta.</p>
 
-    <section class="story-sec">
-      <h3>Full shipped stack</h3>
-      <ul>
-        <li>MediaPipe hand telemetry (21 landmarks per hand) drives articulated virtual glove motion and thumb-index pinch grabs.</li>
-        <li>Deterministic browser simulation scores sequence, alignment, tightening, leaks, retained water, and sewer-gas seal.</li>
-        <li>W&amp;B Weave traces the attempt loop while W&amp;B Inference rewrites coaching language and intervention suggestions.</li>
-        <li>ElevenLabs Live powers Maya as an opt-in coach, with captions/text fallback when voice is off or unavailable.</li>
-        <li>Guided practice is a camera-free option: the validated glove-driven lesson runs with synthetic 21-landmark simulated hands, clearly labelled simulated and never certifiable.</li>
-      </ul>
-    </section>
+    <ol class="wb-loop" aria-label="Observe, Coach, Adapt, Retry, Evaluate">
+      <li class="wb-step"><b>Observe</b><span>Geometry + sequence telemetry</span></li>
+      <li class="wb-step"><b>Coach</b><span>Inference rewrites the hint</span></li>
+      <li class="wb-step"><b>Adapt</b><span>Bounded intervention chosen</span></li>
+      <li class="wb-step"><b>Retry</b><span>Simulation changes first</span></li>
+      <li class="wb-step"><b>Evaluate</b><span>Score delta compared</span></li>
+    </ol>
 
-    <section class="story-sec">
-      <h3>What W&amp;B actually does</h3>
-      <ul>
-        <li><code>pipesense/attempt-loop</code> traces nested observer, coach, evaluator and inference operations.</li>
-        <li>W&amp;B Inference can rewrite coaching language; it cannot change deterministic correctness or score.</li>
-        <li>Retry policy stays bounded: visual target, kinesthetic snap assist, or step-by-step reset.</li>
-        <li>Evaluation compares deterministic score against the previous attempt and keeps or replaces strategy.</li>
-      </ul>
-    </section>
-
-    <section class="story-sec">
-      <h3>Evidence panel</h3>
-      <dl class="story-evidence" id="story-evidence">
-        <div><dt>Attempt</dt><dd id="story-attempt">No run yet.</dd></div>
-        <div><dt>Issue</dt><dd id="story-issue">No run yet.</dd></div>
-        <div><dt>Score</dt><dd id="story-score">No run yet.</dd></div>
-        <div><dt>Intervention</dt><dd id="story-strategy">No run yet.</dd></div>
-        <div><dt>Inference</dt><dd id="story-inference">No run yet.</dd></div>
-        <div><dt>Weave</dt><dd id="story-weave">No run yet.</dd></div>
-        <div><dt>Practice mode</dt><dd id="story-mode">No run yet.</dd></div>
-        <div><dt>Webcam skill</dt><dd id="story-webcam">No run yet.</dd></div>
-        <div><dt>Result</dt><dd id="story-result">No run yet.</dd></div>
+    <section class="wb-card" aria-label="Latest evaluated attempt">
+      <header class="wb-card-head">
+        <h3>Latest evaluated attempt</h3>
+        <span class="wb-badge" id="story-certification" data-tone="muted">Pending</span>
+      </header>
+      <dl class="wb-grid">
+        <div class="wb-item"><dt>Score delta</dt><dd id="story-score">Pending — no evaluated attempt yet</dd></div>
+        <div class="wb-item"><dt>Issue</dt><dd id="story-issue">Pending — no evaluated attempt yet</dd></div>
+        <div class="wb-item"><dt>Intervention · verdict</dt><dd id="story-strategy">Pending — no evaluated attempt yet</dd></div>
+        <div class="wb-item"><dt>Weights &amp; Biases Inference</dt><dd id="story-inference" data-dot="muted">Pending — no evaluated attempt yet</dd></div>
+        <div class="wb-item"><dt>Weave trace</dt><dd id="story-weave" data-dot="muted">Pending — no evaluated attempt yet</dd></div>
+        <div class="wb-item"><dt>Input provenance</dt><dd id="story-input">Pending — no evaluated attempt yet</dd></div>
+        <div class="wb-item"><dt>Camera-control grade</dt><dd id="story-webcam" data-dot="muted">Pending — no evaluated attempt yet</dd></div>
+        <div class="wb-item"><dt>Result</dt><dd id="story-result">Pending — no evaluated attempt yet</dd></div>
       </dl>
-      <p class="story-note" id="story-note">Run at least one evaluation to populate real evidence. This panel never fabricates values.</p>
+      <p class="wb-note" id="story-note">Run one evaluation to populate real evidence. This slide never fabricates values.</p>
     </section>
 
-    <section class="story-sec">
-      <h3>Deterministic scoring vs W&amp;B inference</h3>
-      <p><b>Deterministic scoring:</b> The browser simulation computes geometry, sequencing, score, and pass/fail.</p>
-      <p><b>W&amp;B inference:</b> Optional provider output rewrites coaching text and strategy suggestion, then Weave traces the loop state.</p>
-    </section>
+    <p class="wb-boundary"><b>Deterministic scoring</b> decides geometry, sequence and pass/fail in the browser; <b>the model</b> only rewrites coaching language and the bounded next intervention. No certification is issued or implied.</p>
   </aside>
 
   <aside class="judge" id="judge" hidden aria-label="Judge evidence view">
