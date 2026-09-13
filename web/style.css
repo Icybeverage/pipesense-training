@@ -180,6 +180,47 @@ body:has(.intro:not([hidden])) .cam {
 .cam-status[data-state="ready"]::before { background: var(--ok); box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.16); }
 .cam-status[data-state="error"] { color: #fb7185; }
 .cam-status[data-state="error"]::before { background: #fb7185; box-shadow: 0 0 0 3px rgba(251, 113, 133, 0.14); }
+.cam-status[data-state="practice"] { color: #c4b5fd; }
+.cam-status[data-state="practice"]::before { background: #a78bfa; box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.16); }
+.cam[data-mode="practice"] {
+  z-index: 9;
+  top: 190px;
+  width: clamp(250px, 21vw, 310px);
+  border-color: rgba(167, 139, 250, 0.42);
+}
+.cam[data-mode="practice"] .cam-stage { background: radial-gradient(circle at 50% 45%, #172536, #07101a 70%); }
+.cam-depth { border-top-color: rgba(167, 139, 250, 0.16); color: #9fb4c7; }
+.cam-depth b { color: #d8ccff; font-weight: 650; }
+
+.stage-note {
+  max-width: 570px;
+  margin: 10px 0 0;
+  color: var(--ink-dim);
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+.stage-note b { color: #d8ccff; }
+
+.practice-banner {
+  position: fixed;
+  top: 70px;
+  left: 50%;
+  z-index: 12;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 7px 13px;
+  border: 1px solid rgba(167, 139, 250, 0.35);
+  border-radius: 999px;
+  background: rgba(12, 15, 28, 0.9);
+  color: #d8ccff;
+  font: 650 0.62rem/1.2 var(--mono);
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  box-shadow: 0 10px 30px rgba(0,0,0,.38);
+}
+.practice-banner[hidden] { display: none; }
+
+body.guided-practice .loop-card { border-color: rgba(167, 139, 250, 0.28); }
 
 @media (max-width: 760px) {
   body:has(.intro:not([hidden])) .cam {
@@ -187,6 +228,8 @@ body:has(.intro:not([hidden])) .cam {
     right: 12px;
     width: min(46vw, 260px);
   }
+  .practice-banner { top: 62px; max-width: calc(100vw - 24px); overflow: hidden; text-overflow: ellipsis; }
+  .cam[data-mode="practice"] { top: 150px; right: 10px; width: min(42vw, 250px); }
 }
 
 /* Intro */

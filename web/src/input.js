@@ -23,6 +23,7 @@ import { GEOM } from './sim.js';
 import {
   DEPTH, HAND_CONF, assignHands, clampStep, clampVecStep, createNeutralCalibration, createPinchLatch, depthTarget,
 } from './handtrack.js';
+import { SYNTHETIC_INPUT_MODE, synthesizeHand } from './synth.js';
 
 // The stability helpers (identity assignment, calibrated depth, pinch
 // hysteresis) are pure and live in handtrack.js so node tests can exercise
@@ -30,6 +31,7 @@ import {
 export {
   DEPTH, HAND_CONF, PINCH, assignHands, clampStep, clampVecStep, createNeutralCalibration, createPinchLatch, depthTarget,
 } from './handtrack.js';
+export { SYNTHETIC_INPUT_MODE, synthesizeHand, isSyntheticPractice } from './synth.js';
 
 export const TASKS_VISION_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
 const HAND_MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
@@ -270,6 +272,11 @@ export function createInput({ canvas, video, onStatus, automated = false }) {
   let lastReportedHands = -1;
   let lastCalibReport = -1;
 
+  // Guided practice: no camera. The full-lesson macro drives the same hand
+  // target pose the gloves render and interaction.js resolves against, and
+  // synth.js forward-renders that pose as 21 landmarks for the preview.
+  const practice = { active: false, hands: { left: null, right: null } };
+
   const camera = {
     active: false,
     status: 'off',
@@ -320,8 +327,11 @@ export function createInput({ canvas, video, onStatus, automated = false }) {
   }
 
   function inputMode() {
-    // Learner sessions are camera-only, so an active session always reports
-    // 'camera'; the QA channel keeps the mixed-source classification.
+    // Guided practice is classified on its own so the backend can refuse to
+    // certify it. Learner sessions are otherwise camera-only, so an active
+    // session always reports 'camera'; the QA channel keeps the mixed-source
+    // classification.
+    if (practice.active) return SYNTHETIC_INPUT_MODE;
     if (!automated) return camera.active ? 'camera' : 'keyboard_mouse';
     if (!camera.active || cameraFrames === 0) return 'keyboard_mouse';
     if (fallbackFrames === 0) return 'camera';
@@ -329,6 +339,59 @@ export function createInput({ canvas, video, onStatus, automated = false }) {
     if (ratio > 0.7) return 'camera';
     if (ratio < 0.25) return 'keyboard_mouse';
     return 'mixed';
+  }
+
+  // ---------------------------------------------------- guided practice channel
+  function setSynthetic(active) {
+    const next = Boolean(active);
+    if (next === practice.active) return;
+    practice.active = next;
+    if (next) {
+      // Guided practice and the camera are mutually exclusive so a simulated
+      // session can never borrow a real camera session's certification.
+      stopCamera();
+      for (const side of ['left', 'right']) {
+        hands[side].source = 'synthetic';
+        hands[side].target.joints = null;
+      }
+    } else {
+      practice.hands = { left: null, right: null };
+      for (const side of ['left', 'right']) {
+        if (hands[side].source === 'synthetic') hands[side].source = 'idle';
+      }
+    }
+    status();
+  }
+
+  function updatePractice() {
+    const out = { left: null, right: null };
+    for (const side of ['left', 'right']) {
+      const hand = hands[side];
+      const synth = synthesizeHand(side, {
+        pos: hand.target.pos,
+        yaw: hand.target.yaw,
+        pitch: hand.target.pitch,
+        roll: hand.target.roll,
+        curls: hand.target.curls,
+        thumb: hand.target.thumb,
+        pinch: hand.target.pinch,
+      });
+      out[side] = {
+        points: synth.points,
+        confidence: 1,
+        curls: [...hand.target.curls],
+        thumb: hand.target.thumb,
+        pinchRatio: 1 - clamp01(hand.target.pinch),
+        pinchClosed: hand.pinchClosed,
+        roll: hand.target.roll,
+        pitch: hand.target.pitch,
+        contact: hand.contact,
+        wristZ: synth.wristZ,
+        meanZ: synth.meanZ,
+        synthetic: true,
+      };
+    }
+    practice.hands = out;
   }
 
   // ------------------------------------------- pointer/keyboard QA channel
@@ -770,7 +833,8 @@ export function createInput({ canvas, video, onStatus, automated = false }) {
         calibrator.invalidate(side);
       }
     }
-    if (automated) applyFallback(dt);
+    if (practice.active) updatePractice();
+    if (automated && !practice.active) applyFallback(dt);
     const anyCamera = applyCameraFrame(dt);
     if (anyCamera) cameraFrames += 1;
     else fallbackFrames += 1;
@@ -822,6 +886,12 @@ export function createInput({ canvas, video, onStatus, automated = false }) {
     cameraState: camera,
     inputMode,
     keys,
+    // Guided practice: synthetic hands on the validated glove path, with no
+    // camera. `practiceHands()` exposes the generated 21 landmarks per hand in
+    // the same shape the camera preview renders.
+    setSynthetic,
+    get practiceActive() { return practice.active; },
+    practiceHands() { return practice.hands; },
     // Macros drive the same pinch/curl state the pointer QA channel uses, so
     // scripted commands cannot bypass the hand-target interaction checks.
     forcePinch(side, value) {

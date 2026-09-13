@@ -32,6 +32,7 @@
       <canvas id="hand-overlay" aria-hidden="true"></canvas>
     </div>
     <p class="cam-status" id="cam-status" data-state="idle" role="status" aria-live="polite">Camera off</p>
+    <p class="cam-status cam-depth" id="cam-depth" hidden>Simulated depth · L <b id="depth-left">—</b> · R <b id="depth-right">—</b></p>
   </div>
 
   <section class="intro" id="intro" aria-label="Lesson setup">
@@ -53,7 +54,9 @@
           <div class="stage-actions">
             <button class="btn primary" id="btn-setup-camera" type="button">Enable hand tracking</button>
             <button class="btn" id="btn-tour" type="button">Continue to tutorial</button>
+            <button class="btn" id="btn-guided-practice" type="button">Watch guided practice</button>
           </div>
+          <p class="stage-note" id="guided-note">Guided practice runs the same lesson with synthetic simulated hands and no camera. It is a practice aid only and is <b>not certification</b>. Real hand control with the camera always remains the certifying path.</p>
         </div>
         <figure class="reference-clip">
           <video id="ref-clip" autoplay muted loop playsinline preload="metadata"
@@ -129,6 +132,8 @@
 
   <div class="toast" id="toast" role="status" hidden></div>
 
+  <p class="practice-banner" id="practice-banner" hidden>Guided practice · simulated hands · not certification</p>
+
   <aside class="story" id="story" hidden aria-label="W&B Weave presentation story">
     <header class="story-head">
       <h2>W&amp;B turns each plumbing attempt into a better next attempt</h2>
@@ -155,6 +160,7 @@
         <li>Deterministic browser simulation scores sequence, alignment, tightening, leaks, retained water, and sewer-gas seal.</li>
         <li>W&amp;B Weave traces the attempt loop while W&amp;B Inference rewrites coaching language and intervention suggestions.</li>
         <li>ElevenLabs Live powers Maya as an opt-in coach, with captions/text fallback when voice is off or unavailable.</li>
+        <li>Guided practice is a camera-free option: the validated glove-driven lesson runs with synthetic 21-landmark simulated hands, clearly labelled simulated and never certifiable.</li>
       </ul>
     </section>
 
@@ -177,6 +183,7 @@
         <div><dt>Intervention</dt><dd id="story-strategy">No run yet.</dd></div>
         <div><dt>Inference</dt><dd id="story-inference">No run yet.</dd></div>
         <div><dt>Weave</dt><dd id="story-weave">No run yet.</dd></div>
+        <div><dt>Practice mode</dt><dd id="story-mode">No run yet.</dd></div>
         <div><dt>Webcam skill</dt><dd id="story-webcam">No run yet.</dd></div>
         <div><dt>Result</dt><dd id="story-result">No run yet.</dd></div>
       </dl>

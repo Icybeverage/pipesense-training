@@ -146,6 +146,26 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(grade["privacy"], "aggregate_metrics_only_no_images_or_raw_landmarks")
 
     @patch.dict("os.environ", {}, clear=True)
+    def test_synthetic_practice_can_never_earn_camera_certification(self):
+        payload = {
+            "attempt_number": 1, "score": 100, "previous_score": -1,
+            "primary_issue": "none", "elapsed_seconds": 42,
+            "telemetry": {
+                "events_count": 2000, "camera_frames_seen": 100000,
+                "input_mode": "synthetic_practice", "calibrated": True,
+                "landmarks_peak": 42, "two_hand_frames": 100000,
+                "mean_tracking_confidence": 1, "articulation_events": 10000,
+                "grip_events": 10000, "contact_samples": 100000,
+            },
+        }
+        body = self.client.post("/v1/attempts/evaluate", json=payload).json()
+        grade = body["evidence"]["webcam_tracking"]
+        self.assertEqual(grade["score"], 0)
+        self.assertFalse(grade["passed"])
+        self.assertEqual(grade["source"], "synthetic_practice_not_certifiable")
+        self.assertFalse(grade["checks"]["real_camera_input"])
+
+    @patch.dict("os.environ", {}, clear=True)
     def test_voice_url_reports_unconfigured_without_secrets(self):
         response = self.client.post("/v1/voice/signed-url")
         self.assertEqual(response.status_code, 200)

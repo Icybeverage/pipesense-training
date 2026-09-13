@@ -26,7 +26,7 @@ app = FastAPI(title="PipeSense Voice Agents", version="0.1.0")
 class TelemetrySnapshot(BaseModel):
     events_count: int = Field(default=0, ge=0, le=2000)
     camera_frames_seen: int = Field(default=0, ge=0, le=100000)
-    input_mode: Literal["keyboard_mouse", "camera", "mixed"] = "keyboard_mouse"
+    input_mode: Literal["keyboard_mouse", "camera", "mixed", "synthetic_practice"] = "keyboard_mouse"
     calibrated: bool = False
     landmarks_peak: int = Field(default=0, ge=0, le=42)
     two_hand_frames: int = Field(default=0, ge=0, le=100000)
@@ -55,6 +55,15 @@ def _grade_webcam_tracking(telemetry: TelemetrySnapshot | None) -> dict:
     """Deterministic, privacy-safe control grade; no images or raw landmarks leave the browser."""
     if telemetry is None:
         return {"score": 0, "passed": False, "source": "no_telemetry", "checks": {}}
+    if telemetry.input_mode == "synthetic_practice":
+        return {
+            "score": 0,
+            "passed": False,
+            "source": "synthetic_practice_not_certifiable",
+            "checks": {"real_camera_input": False},
+            "metrics": telemetry.model_dump(),
+            "privacy": "synthetic_landmarks_no_camera_input",
+        }
     checks = {
         "real_camera_input": telemetry.input_mode == "camera",
         "neutral_calibrated": telemetry.calibrated,

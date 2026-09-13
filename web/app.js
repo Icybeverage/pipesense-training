@@ -131,6 +131,7 @@ const session = {
   calibNotified: false,
   tutorialIndex: 0,
   webcamGrade: null,
+  guidedPractice: false,
 };
 
 let propsOut = null;
@@ -142,16 +143,23 @@ const HAND_EDGES = [
   [13,17],[0,17],[17,18],[18,19],[19,20],
 ];
 const FINGERTIPS = new Set([4, 8, 12, 16, 20]);
+const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 let camStatusText = '';
+
+const PRACTICE_LABEL = 'Guided practice · simulated hands · not certification';
 
 // The camera preview shows the tracked 21-point skeleton per hand whenever the
 // camera is active, plus one compact status line: landmark count, tracking /
-// calibration state, and the latest backend webcam-control grade.
+// calibration state, and the latest backend webcam-control grade. Guided
+// practice reuses the same preview for its synthetic 21-landmark hands, where
+// point size and opacity read the landmark depth (Z) as a hand moves in front
+// of or behind the pipes.
 function renderHandOverlay() {
   const overlay = $('hand-overlay');
   if (!overlay) return;
   const cam = input.cameraState;
-  if (!cam.active) {
+  const practice = input.practiceActive;
+  if (!practice && !cam.active) {
     renderCamStatus(cam, 0);
     return;
   }
@@ -163,12 +171,13 @@ function renderHandOverlay() {
   const ctx = overlay.getContext('2d');
   ctx.clearRect(0, 0, width, height);
   ctx.lineCap = 'round';
-  const hands = cam.debugHands || {};
+  const hands = practice ? input.practiceHands() : (cam.debugHands || {});
   let total = 0;
   for (const [side, color] of [['left', '#67e8f9'], ['right', '#fb923c']]) {
     const data = hands[side];
     if (!data) continue;
     total += data.points.length;
+    ctx.globalAlpha = 1;
     ctx.strokeStyle = color;
     ctx.lineWidth = 2.3 * scale;
     ctx.shadowColor = color;
@@ -181,17 +190,52 @@ function renderHandOverlay() {
     }
     data.points.forEach((p, index) => {
       const tip = FINGERTIPS.has(index);
+      // Synthetic Z is signed depth: negative is nearer the viewer, matching
+      // MediaPipe's convention, and it changes as the hands work the pipes.
+      const near = practice ? clamp01((0.5 - (p.z || 0)) / 1.0) : 0.5;
+      ctx.globalAlpha = practice ? 0.45 + 0.55 * near : 1;
       ctx.beginPath();
       ctx.fillStyle = tip ? '#ffffff' : color;
-      ctx.arc(p.x * width, p.y * height, (tip ? 4.2 : 2.5) * scale, 0, Math.PI * 2);
+      const radius = (tip ? 4.2 : 2.5) * scale * (practice ? 0.7 + 0.7 * near : 1);
+      ctx.arc(p.x * width, p.y * height, radius, 0, Math.PI * 2);
       ctx.fill();
     });
   }
+  ctx.globalAlpha = 1;
   ctx.shadowBlur = 0;
-  renderCamStatus(cam, total);
+  if (practice) renderPracticeStatus(hands);
+  else renderCamStatus(cam, total);
+}
+
+function renderPracticeStatus(hands) {
+  const node = $('cam-status');
+  if (node) {
+    if (PRACTICE_LABEL !== camStatusText) { camStatusText = PRACTICE_LABEL; node.textContent = PRACTICE_LABEL; }
+    node.dataset.state = 'practice';
+  }
+  const depth = $('cam-depth');
+  if (!depth) return;
+  depth.hidden = false;
+  for (const side of ['left', 'right']) {
+    const el = $(`depth-${side}`);
+    const data = hands[side];
+    if (!el) continue;
+    el.textContent = data
+      ? `${depthWord(data.meanZ)} z ${data.meanZ.toFixed(2)}`
+      : '—';
+  }
+}
+
+function depthWord(z) {
+  if (!Number.isFinite(z)) return '—';
+  if (z < -0.08) return 'nearer';
+  if (z > 0.08) return 'farther';
+  return 'level';
 }
 
 function renderCamStatus(cam, landmarks) {
+  const depth = $('cam-depth');
+  if (depth) depth.hidden = true;
   const node = $('cam-status');
   if (!node) return;
   const calibration = cam.active ? input.calibrationState() : null;
@@ -464,8 +508,10 @@ function onSimEvent(event) {
 
 function onInputStatus(status) {
   const cam = status.camera;
+  const practice = input.practiceActive;
   const gloveFlowReady = cam.active && cam.calibrated && cam.handsSeen >= 2;
-  $('cam-wrap').hidden = !cam.active;
+  $('cam-wrap').hidden = !(cam.active || practice);
+  $('cam-wrap').dataset.mode = practice ? 'practice' : 'camera';
   $('btn-camera').setAttribute('aria-pressed', cam.active ? 'true' : 'false');
   $('btn-camera').textContent = cam.active ? 'Camera: on' : 'Camera: off';
   const setupButton = $('btn-setup-camera');
@@ -531,6 +577,7 @@ function showCaption({ text, attrib }) {
 let toastTimer = null;
 function toast(text) {
   if (IS_PRESENTATION && /^Autopilot\b/.test(text)) return;
+  if (session.guidedPractice && /^Autopilot\b/.test(text)) return;
   const el = $('toast');
   el.textContent = text;
   el.hidden = false;
@@ -545,6 +592,44 @@ function requireGloveFlow() {
   if (input.cameraState.active && input.calibrationState().ready && input.cameraState.handsSeen >= 2) return true;
   toast('Hand tracking required — enable the camera, keep both hands in frame, and hold for calibration.');
   return false;
+}
+
+// ------------------------------------------------------- guided practice
+//
+// A secondary, camera-free setup path. It reuses the validated glove-driven
+// full-lesson macro, so the simulated hands drive the anatomical gloves and the
+// same interaction/collision checks, never the simulation state directly. The
+// session is labelled simulated and is never certifiable: the backend grades
+// input_mode "synthetic_practice" as passed=false.
+function exitGuidedPractice() {
+  if (!session.guidedPractice) return;
+  session.guidedPractice = false;
+  input.setSynthetic(false);
+  document.body.classList.remove('guided-practice');
+  $('practice-banner').hidden = true;
+  $('cam-depth').hidden = true;
+  camStatusText = '';
+}
+
+function enterGuidedPractice() {
+  if (session.guidedPractice) return;
+  if (input.cameraState.active) input.stopCamera();
+  session.guidedPractice = true;
+  input.setSynthetic(true);
+  document.body.classList.add('guided-practice');
+  $('practice-banner').hidden = false;
+  showCaption({ text: 'Guided practice — simulated hands, no camera. This run is a practice aid and is not certification.', attrib: 'guided practice' });
+  startMacro('full');
+}
+
+function toggleCameraFromUi() {
+  // Camera and Guided practice are mutually exclusive: turning the camera on
+  // leaves the simulated session so certification is never mixed with it.
+  if (input.practiceActive && !input.cameraState.active) {
+    cancelMacro();
+    exitGuidedPractice();
+  }
+  input.toggleCamera();
 }
 
 function showFlowStage(name) {
@@ -743,6 +828,7 @@ async function evaluateAttempt(reason, force = false) {
     verdict: decided.verdict,
     source,
     coach: outcome.coach,
+    input_mode: payload.telemetry?.input_mode || input.inputMode(),
     outcome,
     payload,
     response: session.lastResponse,
@@ -767,6 +853,7 @@ async function evaluateAttempt(reason, force = false) {
     score: result.score,
     primary_issue: result.primary_issue,
     detail: result.detail,
+    input_mode: payload.telemetry?.input_mode || input.inputMode(),
   });
   emit('pipesense:attempt', session.evalHistory[session.evalHistory.length - 1]);
   renderAttempts();
@@ -983,10 +1070,11 @@ const MACROS = {
 };
 
 function startMacro(name) {
-  if (!IS_AUTOMATED_SESSION) {
-    // Scripted glove input exists only for silent automated QA; learner
-    // sessions must drive the gloves with real hands.
-    toast('Autopilot is available only in silent automated QA sessions.');
+  // Scripted glove input exists for silent automated QA and for the explicit
+  // Guided practice option; a normal learner session with the camera must
+  // drive the gloves with real hands.
+  if (!IS_AUTOMATED_SESSION && !session.guidedPractice) {
+    toast('Autopilot is available only in silent automated QA sessions or Guided practice.');
     return;
   }
   if (session.macro.running) { toast('Autopilot already running'); return; }
@@ -1046,7 +1134,10 @@ function renderAttempts() {
     badge.textContent = item.source === 'backend' ? 'backend' : 'local';
     const line = document.createElement('span');
     line.className = 'coach-line';
-    line.textContent = `${item.reason} · ${item.primary_issue}/${item.detail} · ${item.strategy} (${item.verdict}) — ${item.coach}`;
+    const modeTag = item.input_mode === 'synthetic_practice'
+      ? 'guided practice (simulated, not certification) · '
+      : '';
+    line.textContent = `${modeTag}${item.reason} · ${item.primary_issue}/${item.detail} · ${item.strategy} (${item.verdict}) — ${item.coach}`;
     row.append(n, score, badge, line);
     wrap.append(row);
   }
@@ -1062,6 +1153,9 @@ function renderStory() {
     $('story-strategy').textContent = 'No run yet.';
     $('story-inference').textContent = 'No run yet.';
     $('story-weave').textContent = 'No run yet.';
+    $('story-mode').textContent = session.guidedPractice
+      ? 'Guided practice · simulated hands · not certification'
+      : 'Camera · certifying path';
     $('story-webcam').textContent = 'No run yet.';
     $('story-result').textContent = 'No run yet.';
     $('story-note').textContent = 'Run at least one evaluation to populate real evidence. This panel never fabricates values.';
@@ -1072,6 +1166,11 @@ function renderStory() {
   const tracing = evidence.tracing || {};
   const score = evidence.deterministic_score || {};
   const webcam = evidence.webcam_tracking || {};
+  // Preserve the non-certification boundary even if the backend is offline and
+  // the local evaluator has no webcam evidence object to return.
+  const synthetic = latest.input_mode === 'synthetic_practice'
+    || session.guidedPractice
+    || webcam.source === 'synthetic_practice_not_certifiable';
   const prev = Number.isFinite(score.previous) ? score.previous : latest.previous;
   const curr = Number.isFinite(score.current) ? score.current : latest.score;
   const hasPrev = Number.isFinite(prev) && prev >= 0;
@@ -1086,11 +1185,18 @@ function renderStory() {
   $('story-weave').textContent = tracing.active
     ? `${tracing.project || 'project unknown'} · trace active`
     : `${tracing.project || 'no active project'} · trace inactive`;
-  $('story-webcam').textContent = Number.isFinite(webcam.score)
-    ? `${webcam.score}/100 · ${webcam.passed ? 'verified real-camera control' : 'more tracked practice needed'}`
-    : 'No webcam grade returned.';
+  $('story-webcam').textContent = synthetic
+    ? 'Not certifiable — simulated guided practice, no camera input'
+    : Number.isFinite(webcam.score)
+      ? `${webcam.score}/100 · ${webcam.passed ? 'verified real-camera control' : 'more tracked practice needed'}`
+      : 'No webcam grade returned.';
+  $('story-mode').textContent = synthetic
+    ? 'Guided practice · simulated hands · not certification'
+    : 'Camera · certifying path';
   $('story-result').textContent = latest.outcome.improved ? 'improved' : 'did not improve';
-  $('story-note').textContent = 'Live run evidence from the most recent evaluated attempt.';
+  $('story-note').textContent = synthetic
+    ? 'Simulated guided practice. Plumbing score and Weave trace are real; camera-control certification is never earned without a camera.'
+    : 'Live run evidence from the most recent evaluated attempt.';
 }
 
 function renderJudge() {
@@ -1109,6 +1215,7 @@ function renderJudge() {
     voice: voice.status(),
     input: {
       mode: input.inputMode(),
+      guided_practice: input.practiceActive,
       camera_frames: input.cameraFrames(),
       camera: {
         active: input.cameraState.active,
@@ -1116,8 +1223,11 @@ function renderJudge() {
         hands_seen: input.cameraState.handsSeen,
         error: input.cameraState.error || null,
       },
+      synthetic: input.practiceActive
+        ? { landmarks: 42, per_hand: 21, source: 'synth.js forward-render of the glove pose' }
+        : null,
     },
-    note: 'configured != used; provider evidence comes from the response.',
+    note: 'configured != used; provider evidence comes from the response. Guided practice is never certifiable.',
   }, null, 2);
   $('judge-req').textContent = session.lastRequest
     ? JSON.stringify(session.lastRequest, null, 2)
@@ -1130,6 +1240,7 @@ function renderJudge() {
       provider_evidence: session.lastResponse.evidence ? session.lastResponse.evidence.provider : null,
       tracing: session.lastResponse.evidence ? session.lastResponse.evidence.tracing : null,
       deterministic_score: session.lastResponse.evidence ? session.lastResponse.evidence.deterministic_score : null,
+      webcam_tracking: session.lastResponse.evidence ? session.lastResponse.evidence.webcam_tracking : null,
     }, null, 2)
     : 'No evaluation response yet.';
   $('judge-geom').textContent = JSON.stringify(evaluateSim(sim).checks, null, 2);
@@ -1174,7 +1285,7 @@ function runCommand(raw) {
   const rest = parts.join(' ');
   switch (cmd) {
     case 'help': {
-      const base = 'Commands: help, status, reset, camera on|off, voice on|off, judge, story, eval, health, agent connect|disconnect, say <text>, ghost on|off, align on|off, steps on|off';
+      const base = 'Commands: help, status, reset, practice on|off, camera on|off, voice on|off, judge, story, eval, health, agent connect|disconnect, say <text>, ghost on|off, align on|off, steps on|off';
       toast(IS_AUTOMATED_SESSION ? `${base}, run, valve, seat, tighten tail|wall, water` : base);
       break;
     }
@@ -1185,6 +1296,10 @@ function runCommand(raw) {
     }
     case 'reset':
       retryLesson();
+      break;
+    case 'practice':
+      if (arg === 'off') { cancelMacro(); exitGuidedPractice(); }
+      else enterGuidedPractice();
       break;
     case 'camera':
       if (arg === 'on') input.startCamera();
@@ -1266,6 +1381,7 @@ function snapshot() {
     assist: { ...sim.assist },
     voice_used: voice.status().used,
     input_mode: input.inputMode(),
+    guided_practice: session.guidedPractice,
   };
 }
 
@@ -1350,7 +1466,7 @@ function wireUi() {
     }
     showCaption({ text: opening, attrib: 'coach · text' });
   });
-  $('btn-setup-camera').addEventListener('click', () => { input.toggleCamera(); });
+  $('btn-setup-camera').addEventListener('click', () => { toggleCameraFromUi(); });
   $('btn-tour').addEventListener('click', () => {
     if (!session.started && !requireGloveFlow()) return;
     showFlowStage('tutorial');
@@ -1373,7 +1489,8 @@ function wireUi() {
       setTutorialIndex(best, false);
     }, 90);
   }, { passive: true });
-  $('btn-camera').addEventListener('click', () => { input.toggleCamera(); });
+  $('btn-camera').addEventListener('click', () => { toggleCameraFromUi(); });
+  $('btn-guided-practice').addEventListener('click', enterGuidedPractice);
   $('btn-voice').addEventListener('click', () => { voice.setEnabled(!voice.enabled); });
   $('btn-retry').addEventListener('click', retryLesson);
   $('btn-drop').addEventListener('click', () => {
@@ -1404,9 +1521,12 @@ function wireUi() {
   window.addEventListener('keydown', (event) => {
     const target = event.target;
     if (target instanceof HTMLElement && target.closest('input, textarea')) return;
+    if (session.guidedPractice && event.key !== 'Escape') return;
     cancelMacro();
   }, true);
-  canvas.addEventListener('pointerdown', cancelMacro, true);
+  canvas.addEventListener('pointerdown', () => {
+    if (!session.guidedPractice) cancelMacro();
+  }, true);
   window.addEventListener('resize', resize);
   document.addEventListener('visibilitychange', () => { if (document.hidden) cancelMacro(); });
 }
@@ -1420,6 +1540,8 @@ window.PipeSense = {
   disconnectVoice: () => voice.disconnect(),
   run: (name = 'full') => startMacro(name),
   command: runCommand,
+  guidedPractice: () => enterGuidedPractice(),
+  exitGuidedPractice: () => { cancelMacro(); exitGuidedPractice(); },
   evaluate: () => evaluateAttempt('manual', true),
   health: probeHealth,
   status: {
