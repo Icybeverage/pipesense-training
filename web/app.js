@@ -26,7 +26,9 @@ import { BACKEND_BASE, BACKEND_COOLDOWN_MS, buildPayload, getHealth, offlineCoac
 import { createVoice } from './src/voice.js';
 
 const $ = (id) => document.getElementById(id);
-const IS_AUTOMATED_SESSION = navigator.webdriver || new URLSearchParams(location.search).has('qa');
+const URL_PARAMS = new URLSearchParams(location.search);
+const IS_AUTOMATED_SESSION = navigator.webdriver || URL_PARAMS.has('qa');
+const IS_PRESENTATION = URL_PARAMS.has('present');
 
 const SEAT_ANCHOR = new THREE.Vector3(GEOM.tail.x, GEOM.seat.tailTopY, GEOM.seatPose.z);
 const GAS_SEAL_POINT = new THREE.Vector3(0, 0.62, 0.30);
@@ -453,6 +455,7 @@ function showCaption({ text, attrib }) {
 
 let toastTimer = null;
 function toast(text) {
+  if (IS_PRESENTATION && /^Autopilot\b/.test(text)) return;
   const el = $('toast');
   el.textContent = text;
   el.hidden = false;
@@ -473,13 +476,15 @@ function showFlowStage(name) {
   const setup = $('stage-setup');
   const tutorial = $('stage-tutorial');
   const isTutorial = name === 'tutorial';
+  const progressStep = session.started ? 3 : isTutorial ? 2 : 1;
   setup.hidden = isTutorial;
   setup.classList.toggle('active', !isTutorial);
   tutorial.hidden = !isTutorial;
   tutorial.classList.toggle('active', isTutorial);
   document.querySelectorAll('.flow-progress i').forEach((dot, i) => {
-    dot.classList.toggle('active', i <= (isTutorial ? 1 : 0));
+    dot.classList.toggle('active', i < progressStep);
   });
+  document.querySelector('.flow-progress')?.setAttribute('aria-valuenow', String(progressStep));
   if (isTutorial) requestAnimationFrame(() => setTutorialIndex(session.tutorialIndex, false));
 }
 
@@ -1212,6 +1217,7 @@ function resize() {
 }
 
 function wireUi() {
+  document.body.classList.toggle('presentation-mode', IS_PRESENTATION);
   renderTutorialDeck();
   const refClip = $('ref-clip');
   if (refClip) {
@@ -1240,13 +1246,14 @@ function wireUi() {
     $('practice-card').hidden = false;
     $('loop-card').hidden = false;
     document.querySelectorAll('.flow-progress i').forEach((dot) => dot.classList.add('active'));
+    document.querySelector('.flow-progress')?.setAttribute('aria-valuenow', '3');
     canvas.focus();
     renderPracticeCard();
     setLoopPhase('observe', session.attempts ? 'Continue the coached retry.' : 'Your first attempt becomes the baseline.', session.health?.ok ? 'W&B · Weave ready' : 'Connecting…');
     if (wasStarted) return;
     const opening = 'Workspace ready. Close the supply valve, seat the trap on both pipe ends, then tighten the slip nuts.';
     if (IS_AUTOMATED_SESSION) {
-      showCaption({ text: opening, attrib: 'coach · silent QA' });
+      showCaption({ text: opening, attrib: IS_PRESENTATION ? 'guided demo' : 'coach · silent QA' });
       return;
     }
     showCaption({ text: opening, attrib: 'coach · text' });

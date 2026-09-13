@@ -114,9 +114,12 @@ function createHandState(side) {
     side,
     source: 'idle',
     target: {
-      pos: { x: side === 'left' ? -0.24 : 0.24, y: 0.52, z: 0.5 },
-      yaw: Math.PI, pitch: -0.18, roll: 0,
-      curls: [0.25, 0.25, 0.25, 0.25], thumb: 0.2, pinch: 0, highlight: 0, contact: 0,
+      // Rest in an open, visible neutral pose. Camera input replaces this
+      // immediately after calibration; scripted QA keeps the same human hand
+      // silhouette until a task moves the wrist.
+      pos: { x: side === 'left' ? -0.24 : 0.24, y: 0.62, z: 0.46 },
+      yaw: 0, pitch: -0.10, roll: 0,
+      curls: [0.10, 0.08, 0.10, 0.14], thumb: 0.12, pinch: 0, highlight: 0, contact: 0,
       joints: null,
     },
     pinchClosed: false,

@@ -547,6 +547,10 @@ code {
   z-index: 9;
 }
 
+.presentation-mode .controls { display: none; }
+.presentation-mode .hud { bottom: 24px; }
+.presentation-mode .toast { display: none; }
+
 .cmd-wrap { flex: 1 1 230px; min-width: 170px; display: flex; }
 
 .cmd {
@@ -829,8 +833,24 @@ code {
 .badge.local { border-color: rgba(251, 191, 36, 0.5); color: #fde68a; }
 
 @media (max-width: 760px) {
-  .controls { border-radius: 22px; padding: 12px; }
-  .hud { bottom: clamp(150px, 24vh, 200px); }
+  .controls {
+    left: 8px;
+    right: 8px;
+    bottom: max(8px, env(safe-area-inset-bottom));
+    width: auto;
+    transform: none;
+    justify-content: flex-start;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    border-radius: 18px;
+    padding: 8px;
+    gap: 6px;
+    scrollbar-width: thin;
+  }
+  .controls .btn { padding: 8px 12px; font-size: .78rem; }
+  .hud { bottom: 202px; width: calc(100vw - 32px); }
+  .caption { font-size: .88rem; line-height: 1.35; }
+  .attrib { margin-top: 4px; font-size: .56rem; }
   .steps, .align {
     top: auto;
     bottom: 242px;
@@ -856,12 +876,16 @@ code {
   #stage-setup.active { grid-template-columns:1fr; overflow:auto; max-height:calc(94vh - 82px); }
   .reference-clip { aspect-ratio:4 / 3; min-height:240px; }
   .tutorial-heading { align-items:start; flex-direction:column; }
-  .practice-card { left:12px; top:76px; }
-  .loop-card { left:12px; right:12px; top:auto; bottom:142px; width:auto; }
+  .practice-card { left:12px; right:12px; top:76px; width:auto; }
+  .loop-card { left:12px; right:12px; top:auto; bottom:76px; width:auto; padding:10px 12px; }
+  .loop-card p { font-size:.67rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .loop-track { margin:9px 0 7px; }
   .loop-track span { font-size:.5rem; }
-  .controls { justify-content:flex-start; overflow-x:auto; flex-wrap:nowrap; }
   .align-row { font-size: 0.72rem; }
   .align-note { font-size: 0.61rem; }
+  .presentation-mode .loop-card { bottom:14px; }
+  .presentation-mode .hud { bottom:112px; }
+  .presentation-mode .controls { display:none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

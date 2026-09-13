@@ -12,12 +12,12 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 
 const PALM = { w: 0.095, t: 0.036, l: 0.112, front: 0.108 };
 const FINGERS = [
-  { key: 'index', x: 0.031, dz: 0.000, lens: [0.043, 0.029, 0.021], w: 0.0185, curlMax: [1.35, 1.5, 0.8] },
-  { key: 'middle', x: 0.010, dz: 0.005, lens: [0.047, 0.032, 0.022], w: 0.0195, curlMax: [1.3, 1.5, 0.8] },
-  { key: 'ring', x: -0.011, dz: 0.001, lens: [0.043, 0.029, 0.021], w: 0.018, curlMax: [1.3, 1.5, 0.85] },
-  { key: 'pinky', x: -0.033, dz: -0.008, lens: [0.035, 0.024, 0.018], w: 0.016, curlMax: [1.25, 1.45, 0.9] },
+  { key: 'index', x: 0.031, dz: 0.000, lens: [0.043, 0.029, 0.021], w: 0.0220, curlMax: [1.35, 1.5, 0.8] },
+  { key: 'middle', x: 0.010, dz: 0.005, lens: [0.047, 0.032, 0.022], w: 0.0230, curlMax: [1.3, 1.5, 0.8] },
+  { key: 'ring', x: -0.011, dz: 0.001, lens: [0.043, 0.029, 0.021], w: 0.0215, curlMax: [1.3, 1.5, 0.85] },
+  { key: 'pinky', x: -0.033, dz: -0.008, lens: [0.035, 0.024, 0.018], w: 0.0190, curlMax: [1.25, 1.45, 0.9] },
 ];
-const THUMB = { lens: [0.036, 0.027, 0.020], w: 0.022 };
+const THUMB = { lens: [0.036, 0.027, 0.020], w: 0.025 };
 
 const LEATHER_SURFACE = makeLeatherSurface();
 
@@ -114,19 +114,17 @@ function makeLeatherSurface() {
   return { diffuseMap, roughnessMap, normalMap };
 }
 
-function leather(color, rough = 0.88, repeat = 3.4) {
+function leather(color, rough = 0.94, repeat = 3.4) {
   const mat = new THREE.MeshStandardMaterial({
     color,
     map: LEATHER_SURFACE.diffuseMap.clone(),
-    roughnessMap: LEATHER_SURFACE.roughnessMap.clone(),
     normalMap: LEATHER_SURFACE.normalMap.clone(),
     roughness: rough,
     metalness: 0,
-    normalScale: new THREE.Vector2(0.2, 0.2),
-    envMapIntensity: 0.32,
+    normalScale: new THREE.Vector2(0.14, 0.14),
+    envMapIntensity: 0.05,
   });
   mat.map.repeat.set(repeat, repeat);
-  mat.roughnessMap.repeat.set(repeat, repeat);
   mat.normalMap.repeat.set(repeat, repeat);
   return mat;
 }
@@ -138,28 +136,35 @@ function damp(cur, target, lambda, dt) {
 export function createGlove(side) {
   const s = side === 'right' ? 1 : -1;
   const mats = {
-    leather: leather(side === 'right' ? 0x2f3136 : 0x303236, 0.86, 3.5),
-    leatherPalm: leather(0x282a2f, 0.91, 3.9),
-    pad: leather(0x1d2027, 0.77, 4.8),
-    cuff: leather(0x232730, 0.89, 3.2),
-    seam: leather(0x3f3833, 0.8, 9.5),
+    leather: leather(side === 'right' ? 0x17191d : 0x15171a, 0.99, 3.5),
+    leatherPalm: leather(0x111317, 1.0, 3.9),
+    pad: leather(0x090b0e, 1.0, 4.8),
+    cuff: leather(0x101318, 1.0, 3.2),
+    seam: leather(0x241d19, 0.98, 9.5),
   };
 
   const root = new THREE.Group();
   root.name = `glove-${side}`;
 
-  const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.045, 0.082, 20, 1, true), mats.cuff);
+  const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.044, 0.040, 0.054, 24, 2, true), mats.cuff);
   cuff.rotation.x = Math.PI / 2;
-  cuff.position.set(0, -0.004, -0.058);
+  cuff.position.set(0, -0.003, -0.032);
   root.add(cuff);
-  const cuffRing = new THREE.Mesh(new THREE.TorusGeometry(0.049, 0.0046, 12, 26), mats.cuff);
-  cuffRing.position.set(0, -0.004, -0.018);
+  const cuffRing = new THREE.Mesh(new THREE.TorusGeometry(0.043, 0.0036, 12, 28), mats.seam);
+  cuffRing.position.set(0, -0.003, -0.005);
   root.add(cuffRing);
 
   const palm = new THREE.Mesh(new RoundedBoxGeometry(PALM.w, PALM.t, PALM.l, 3, 0.009), mats.leatherPalm);
   palm.position.set(0, 0, PALM.l / 2 - 0.006);
   palm.castShadow = true;
   root.add(palm);
+  // A shallow anatomical shell softens the rectangular rig into the convex
+  // silhouette of a gloved metacarpus without changing any landmark pivots.
+  const palmDome = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 18), mats.leather);
+  palmDome.scale.set(PALM.w * 0.48, PALM.t * 0.62, PALM.l * 0.48);
+  palmDome.position.set(0, PALM.t * 0.18, PALM.l * 0.50);
+  palmDome.castShadow = true;
+  root.add(palmDome);
   const thenar = new THREE.Mesh(new THREE.SphereGeometry(0.018, 16, 16), mats.leatherPalm);
   thenar.scale.set(1.1, 0.68, 1.26);
   thenar.position.set(0.026 * s, -0.0015, 0.047);
@@ -198,20 +203,17 @@ export function createGlove(side) {
     let parent = mcp;
     spec.lens.forEach((len, i) => {
       const taper = 1 - i * 0.115;
+      const radius = spec.w * taper * (0.47 - i * 0.015);
       const seg = new THREE.Mesh(
-        new RoundedBoxGeometry(spec.w * taper, spec.w * (0.9 - i * 0.05), len, 2, spec.w * (0.3 - i * 0.02)),
+        // Extend each capsule through its pivot so adjacent phalanges overlap
+        // like one padded glove instead of reading as disconnected robot links.
+        new THREE.CapsuleGeometry(radius, Math.max(0.003, len - radius * 2 + 0.010), 5, 14),
         mats.leather,
       );
+      seg.rotation.x = Math.PI / 2;
       seg.position.set(0, 0, len / 2);
       seg.castShadow = true;
       parent.add(seg);
-      if (i < spec.lens.length - 1) {
-        const jointBulge = new THREE.Mesh(new THREE.SphereGeometry(spec.w * (0.42 - i * 0.06), 12, 12), mats.leatherPalm);
-        jointBulge.scale.set(1.12, 0.94, 0.94);
-        jointBulge.position.set(0, 0, len - 0.001);
-        jointBulge.castShadow = true;
-        parent.add(jointBulge);
-      }
       if (i < spec.lens.length - 1) {
         const next = new THREE.Group();
         next.position.set(0, 0, len);
@@ -219,7 +221,8 @@ export function createGlove(side) {
         joints.push(next);
         parent = next;
       } else {
-        const tip = new THREE.Mesh(new RoundedBoxGeometry(spec.w * 0.84, spec.w * 0.73, 0.011, 2, spec.w * 0.24), mats.pad);
+        const tip = new THREE.Mesh(new THREE.SphereGeometry(spec.w * 0.39, 14, 12), mats.pad);
+        tip.scale.set(1, 0.78, 1.28);
         tip.position.set(0, 0, len + 0.004);
         parent.add(tip);
         if (spec.key === 'index') {
@@ -242,20 +245,15 @@ export function createGlove(side) {
     let parent = thumbBase;
     THUMB.lens.forEach((len, i) => {
       const taper = 1 - i * 0.12;
+      const radius = THUMB.w * taper * (0.49 - i * 0.015);
       const seg = new THREE.Mesh(
-        new RoundedBoxGeometry(THUMB.w * taper, THUMB.w * (0.94 - i * 0.06), len, 2, THUMB.w * 0.3),
+        new THREE.CapsuleGeometry(radius, Math.max(0.003, len - radius * 2 + 0.010), 5, 14),
         mats.leather,
       );
+      seg.rotation.x = Math.PI / 2;
       seg.position.set(0, 0, len / 2);
       seg.castShadow = true;
       parent.add(seg);
-      if (i < THUMB.lens.length - 1) {
-        const thumbKnuckle = new THREE.Mesh(new THREE.SphereGeometry(THUMB.w * (0.36 - i * 0.05), 12, 12), mats.leatherPalm);
-        thumbKnuckle.scale.set(1.14, 0.96, 0.96);
-        thumbKnuckle.position.set(0, 0, len - 0.001);
-        thumbKnuckle.castShadow = true;
-        parent.add(thumbKnuckle);
-      }
       if (i < THUMB.lens.length - 1) {
         const next = new THREE.Group();
         next.position.set(0, 0, len);
