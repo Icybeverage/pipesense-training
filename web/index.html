@@ -34,10 +34,7 @@
   <section class="intro" id="intro" aria-label="Lesson setup">
     <div class="flow-shell">
       <header class="flow-head">
-        <div>
-          <p class="eyebrow">Certification practice · plumbing skills check</p>
-          <h2>Build a P-Trap</h2>
-        </div>
+        <h2>Build a P-Trap</h2>
         <div class="flow-progress" aria-label="Setup progress"><i class="active"></i><i></i><i></i></div>
       </header>
 
@@ -45,29 +42,30 @@
         <div class="stage-copy">
           <span class="stage-kicker">01 · Calibrate</span>
           <h3 id="setup-title">Put your hands in the workspace</h3>
-          <p>Your real hands drive the simulation: all 21 landmarks per hand articulate the glove joints, and a thumb–index pinch grabs tools and fittings. Enable the camera and hold both hands steady — the tutorial unlocks once your neutral pose is calibrated.</p>
+          <p>Enable hand tracking, raise both hands in frame, and hold still until calibration is complete.</p>
           <div class="tracking-readout" id="tracking-readout" data-state="idle">
             <span class="tracking-dot"></span>
-            <div><strong id="tracking-title">Camera required — not connected</strong><small id="tracking-detail">Enable the camera — all 21 landmarks per hand map to the articulated glove joints; pinch thumb to index to grab tools.</small></div>
+            <div><strong id="tracking-title">Camera required — not connected</strong><small id="tracking-detail">Enable the camera to map your hands to the virtual work gloves.</small></div>
           </div>
           <div class="stage-actions">
             <button class="btn primary" id="btn-setup-camera" type="button">Enable hand tracking</button>
             <button class="btn" id="btn-tour" type="button">Continue to tutorial</button>
           </div>
         </div>
-        <div class="calibration-visual" aria-hidden="true">
-          <div class="scan-frame"><span></span><span></span><span></span><span></span></div>
-          <div class="hand-readout left"><b>LEFT</b><em>21 landmarks</em></div>
-          <div class="hand-readout right"><b>RIGHT</b><em>21 landmarks</em></div>
-          <div class="scan-line"></div>
-          <p>Hold both hands steady to calibrate</p>
-        </div>
+        <figure class="reference-clip">
+          <video id="ref-clip" autoplay muted loop playsinline preload="metadata"
+            poster="assets/real-world-hand-tracking-poster.jpg"
+            aria-label="A learner in safety gear moves both gloved hands in front of a wall display while tracked hand landmarks follow each hand.">
+            <source src="assets/real-world-hand-tracking.mp4" type="video/mp4" />
+          </video>
+          <figcaption>Real-world hand tracking</figcaption>
+        </figure>
       </section>
 
       <section class="flow-stage" id="stage-tutorial" hidden aria-labelledby="tutorial-title">
         <div class="tutorial-heading">
           <div><span class="stage-kicker">02 · Visual walkthrough</span><h3 id="tutorial-title">Learn the sequence</h3></div>
-          <p>Scroll the procedure cards. The active card will follow you into the simulation.</p>
+          <p>Review five steps, then start.</p>
         </div>
         <div class="tutorial-deck" id="tutorial-deck" tabindex="0" aria-label="P-trap procedure cards"></div>
         <div class="deck-controls">
@@ -116,10 +114,10 @@
   <footer class="controls" id="controls">
     <button class="btn" id="btn-camera" type="button" aria-pressed="false">Camera: off</button>
     <button class="btn" id="btn-voice" type="button" aria-pressed="false">Maya: off</button>
-    <button class="btn" id="btn-guide" type="button">Procedure</button>
+    <button class="btn" id="btn-guide" type="button">Tutorial</button>
     <button class="btn" id="btn-retry" type="button">Retry</button>
     <button class="btn" id="btn-drop" type="button">Release hands</button>
-    <details class="more"><summary class="btn ghost">More</summary><div class="more-menu">
+    <details class="more" id="more-tools"><summary class="btn ghost">Views</summary><div class="more-menu">
       <label class="cmd-wrap"><span class="sr-only">Command</span><input class="cmd" id="cmd" type="text" autocomplete="off" spellcheck="false" placeholder="Demo command…" /></label>
       <button class="btn ghost" id="btn-story" type="button" aria-expanded="false" aria-controls="story">W&amp;B story</button>
       <button class="btn ghost" id="btn-judge" type="button" aria-expanded="false" aria-controls="judge">Judge evidence</button>

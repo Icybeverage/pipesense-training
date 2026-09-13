@@ -44,58 +44,48 @@ const LESSON_STEPS = [
     hint: 'Pinch the red handle and rotate clockwise until it stops.',
     done: (s) => s.valve.closed,
     tutorial: {
-      tag: 'ISOLATE',
-      footerLabel: 'Gesture',
-      footerValue: 'Pinch + rotate',
-      svg: '<svg viewBox="0 0 260 150" role="img" aria-label="Turn the shutoff valve clockwise"><path d="M130 34v82M96 58h68M104 48l52 20M104 68l52-20"/><circle cx="130" cy="58" r="31"/><path class="motion" d="M82 106c28 28 68 30 98 4"/><path class="arrow" d="m171 99 12 11-15 7"/></svg>',
+      image: 'assets/tutorial/step-01.jpg',
+      alt: 'A gloved hand closing the red supply valve under the sink.',
     },
   },
   {
     id: 'seat',
     title: 'Seat both sockets',
-    hint: 'Lift the trap level. Center the tailpiece and wall arm before you release.',
+    hint: 'Lift the trap level and center both sockets before you release.',
     done: (s) => s.objects.trap.mode === 'seated',
     tutorial: {
-      tag: 'ALIGN',
-      footerLabel: 'Gesture',
-      footerValue: 'Pinch + lift',
-      svg: '<svg viewBox="0 0 260 150" role="img" aria-label="Lift the P-trap into both pipe sockets"><path d="M75 30v40M185 30v40M75 70c0 64 110 64 110 0"/><path class="motion" d="M130 128V92"/><path class="arrow" d="m120 102 10-12 10 12"/><circle cx="75" cy="68" r="13"/><circle cx="185" cy="68" r="13"/></svg>',
+      image: 'assets/tutorial/step-02.jpg',
+      alt: 'Two gloved hands lifting the P-trap to meet the tailpiece and wall drain sockets.',
     },
   },
   {
     id: 'tail_nut',
     title: 'Tighten the tail nut',
-    hint: 'Pick up the adjustable wrench, seat its jaw on the tail nut, then rotate until it clicks tight.',
+    hint: 'Seat the wrench jaw on the tail nut and rotate until it clicks tight.',
     done: (s) => s.joints.tail.tight >= TUNE.tightFull,
     tutorial: {
-      tag: 'SECURE',
-      footerLabel: 'Tool',
-      footerValue: 'Adjustable wrench',
-      svg: '<svg viewBox="0 0 260 150" role="img" aria-label="Tighten the first slip nut with a wrench"><path d="M72 32v86M188 32v86M72 82c0 48 116 48 116 0"/><circle cx="72" cy="70" r="17"/><path d="m53 116 57-47 15 17-58 47z"/><path class="motion" d="M115 52c24 8 37 29 33 50"/></svg>',
+      image: 'assets/tutorial/step-03.jpg',
+      alt: 'One gloved hand steadying the trap while an adjustable wrench tightens the tail slip nut.',
     },
   },
   {
     id: 'wall_nut',
     title: 'Tighten the wall nut',
-    hint: 'Keep the trap level and keep the wrench pinched while you secure the wall-side connection.',
+    hint: 'Hold the trap level and tighten the wall nut with the wrench.',
     done: (s) => s.joints.wall.tight >= TUNE.tightFull,
     tutorial: {
-      tag: 'SECURE',
-      footerLabel: 'Check',
-      footerValue: 'Both joints tight',
-      svg: '<svg viewBox="0 0 260 150" role="img" aria-label="Tighten the wall slip nut with a wrench"><path d="M62 30v92M62 82c0 48 122 48 122 0V54h35"/><circle cx="184" cy="67" r="17"/><path d="m146 125 42-58 18 13-43 58z"/><path class="motion" d="M203 43c19 13 26 34 18 54"/></svg>',
+      image: 'assets/tutorial/step-04.jpg',
+      alt: 'An adjustable wrench tightening the wall-side slip nut on the horizontal drain arm.',
     },
   },
   {
     id: 'water',
     title: 'Run water and inspect',
-    hint: 'Open the faucet. The trap must retain water with no leak at either joint.',
+    hint: 'Open the faucet and confirm the trap holds water with no leaks at either joint.',
     done: (s) => s.phase === 'complete',
     tutorial: {
-      tag: 'VERIFY',
-      footerLabel: 'Pass',
-      footerValue: 'Seal holds',
-      svg: '<svg viewBox="0 0 260 150" role="img" aria-label="Run water and verify the trap seal"><path d="M67 28h80c34 0 34 35 34 35"/><path d="M181 63c-12 19-12 28 0 40 12-12 12-21 0-40z"/><path d="M70 95c0 45 120 45 120 0"/><path class="motion" d="M212 72v46"/><path class="arrow" d="m203 108 9 12 9-12"/></svg>',
+      image: 'assets/tutorial/step-05.jpg',
+      alt: 'Gloved hands checking the water-filled trap after the test; the joints stay dry.',
     },
   },
 ];
@@ -420,19 +410,19 @@ function onInputStatus(status) {
           : cam.active ? 'Looking for your hands' : 'Camera required — not connected';
     $('tracking-detail').textContent = cam.status === 'error' ? cam.error
       : calibrating ? `Hold both hands steady — ${Math.round(cam.calibProgress * 100)}% · calibration unlocks the tutorial`
-        : readyHands ? 'Neutral pose set. All 21 landmarks drive the articulated glove joints; pinch thumb to index to grab tools.'
-          : cam.active ? 'Raise both hands, palms facing the camera — both hands must be tracked before the tutorial can unlock.'
-            : 'Enable the camera — all 21 landmarks per hand map to the articulated glove joints; pinch thumb to index to grab tools.';
+        : readyHands ? 'Neutral pose set — pinch thumb to index to grab tools.'
+          : cam.active ? 'Raise both hands, palms facing the camera — both hands must be tracked to unlock the tutorial.'
+            : 'Enable the camera to map your hands to the virtual work gloves.';
   }
   if (cam.calibrated && !session.calibNotified) {
     session.calibNotified = true;
-    toast('Neutral pose calibrated — all 21 landmarks of each hand now drive the articulated glove joints; pinch thumb to index to grab a tool.');
+    toast('Neutral pose calibrated — pinch thumb to index to grab a tool.');
   }
   if (!cam.active) session.calibNotified = false;
   if (cam.status === 'error' && cam.error) toast(`Camera unavailable — ${cam.error}`);
   if (cam.active && cam.handsSeen === 0 && !session.handsHinted) {
     session.handsHinted = true;
-    toast('Camera on — hold both hands in frame. Each hand\'s 21 landmarks map to the articulated glove joints.');
+    toast('Camera on — hold both hands in frame.');
   }
 }
 
@@ -470,7 +460,7 @@ function toast(text) {
 function requireGloveFlow() {
   if (IS_AUTOMATED_SESSION) return true;
   if (input.cameraState.active && input.calibrationState().ready && input.cameraState.handsSeen >= 2) return true;
-  toast('Hand tracking required — enable the camera, keep both hands in frame, and hold steady until neutral calibration completes.');
+  toast('Hand tracking required — enable the camera, keep both hands in frame, and hold for calibration.');
   return false;
 }
 
@@ -560,14 +550,16 @@ function renderTutorialDeck() {
   if (!deck) return;
   deck.textContent = '';
   LESSON_STEPS.forEach((step, index) => {
-    const card = document.createElement('article');
+    const card = document.createElement('figure');
     card.className = 'tutorial-card';
     card.dataset.step = String(index + 1);
     card.innerHTML = `
-      <div class="card-top"><span>STEP ${String(index + 1).padStart(2, '0')}</span><b>${step.tutorial.tag}</b></div>
-      ${step.tutorial.svg}
-      <h4>${step.title}</h4><p>${step.hint}</p>
-      <footer><span>${step.tutorial.footerLabel}</span><strong>${step.tutorial.footerValue}</strong></footer>
+      <img src="${step.tutorial.image}" alt="${step.tutorial.alt}" decoding="async" loading="lazy" draggable="false" />
+      <figcaption>
+        <span>Step ${index + 1}</span>
+        <h4>${step.title}</h4>
+        <p>${step.hint}</p>
+      </figcaption>
     `;
     deck.append(card);
   });
@@ -1040,13 +1032,13 @@ function renderJudge() {
   renderAttempts();
 }
 
-async function probeHealth() {
+async function probeHealth({ notify = true } = {}) {
   const health = await getHealth();
   session.health = health;
   if (health.ok && health.data?.tracing?.active) $('loop-source').textContent = 'W&B · Weave ready';
   renderJudge();
   renderStory();
-  toast(health.ok ? `Backend healthy (${health.ms} ms)` : `Backend unavailable — ${health.error}`);
+  if (notify) toast(health.ok ? 'Services connected' : 'Services unavailable');
 }
 
 function toggleJudge(force) {
@@ -1213,6 +1205,19 @@ function resize() {
 
 function wireUi() {
   renderTutorialDeck();
+  const refClip = $('ref-clip');
+  if (refClip) {
+    refClip.muted = true;
+    refClip.defaultMuted = true;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      refClip.autoplay = false;
+      refClip.pause();
+    }
+  }
+  const cmdWrap = $('cmd')?.closest('label');
+  if (!IS_AUTOMATED_SESSION && cmdWrap) {
+    cmdWrap.hidden = true;
+  }
   if (!IS_AUTOMATED_SESSION) {
     // Learner flows start locked: the camera must see both hands and the
     // neutral pose must calibrate before the tutorial or simulation opens.
@@ -1329,4 +1334,4 @@ renderAttempts();
 renderStory();
 renderJudge();
 requestAnimationFrame(frame);
-probeHealth();
+probeHealth({ notify: false });

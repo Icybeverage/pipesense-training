@@ -19,12 +19,116 @@ const FINGERS = [
 ];
 const THUMB = { lens: [0.031, 0.025, 0.019], w: 0.021 };
 
-function leather(color, rough = 0.88) {
-  return new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0.03 });
+const LEATHER_SURFACE = makeLeatherSurface();
+
+function fract(v) {
+  return v - Math.floor(v);
 }
 
-function accentMat(color) {
-  return new THREE.MeshStandardMaterial({ color, roughness: 0.6, metalness: 0.05, emissive: color, emissiveIntensity: 0.14 });
+function hash2(x, y, seed) {
+  return fract(Math.sin((x + seed * 13.13) * 127.1 + (y + seed * 0.73) * 311.7) * 43758.5453123);
+}
+
+function smoothNoise(x, y, seed) {
+  const x0 = Math.floor(x);
+  const y0 = Math.floor(y);
+  const tx = x - x0;
+  const ty = y - y0;
+  const sx = tx * tx * (3 - 2 * tx);
+  const sy = ty * ty * (3 - 2 * ty);
+  const a = hash2(x0, y0, seed);
+  const b = hash2(x0 + 1, y0, seed);
+  const c = hash2(x0, y0 + 1, seed);
+  const d = hash2(x0 + 1, y0 + 1, seed);
+  const ab = a + (b - a) * sx;
+  const cd = c + (d - c) * sx;
+  return ab + (cd - ab) * sy;
+}
+
+function octaveNoise(x, y, seed) {
+  let freq = 1;
+  let amp = 0.55;
+  let total = 0;
+  let norm = 0;
+  for (let i = 0; i < 4; i++) {
+    total += smoothNoise(x * freq, y * freq, seed + i * 7.17) * amp;
+    norm += amp;
+    freq *= 2.1;
+    amp *= 0.5;
+  }
+  return total / norm;
+}
+
+function makeLeatherSurface() {
+  const size = 192;
+  const diffuseData = new Uint8Array(size * size * 3);
+  const roughData = new Uint8Array(size * size);
+  const normalData = new Uint8Array(size * size * 3);
+  const height = new Float32Array(size * size);
+  const warmTint = new THREE.Color(0x493d35);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = y * size + x;
+      const n0 = octaveNoise(x / 38, y / 38, 2.17);
+      const n1 = octaveNoise(x / 15.5, y / 15.5, 7.83);
+      const n2 = octaveNoise((x + 31) / 6.5, (y + 11) / 6.5, 18.11);
+      const micro = n0 * 0.56 + n1 * 0.30 + n2 * 0.14;
+      const grain = Math.pow(Math.max(0.0, micro), 1.35);
+      const wear = Math.max(0, octaveNoise((x + 70) / 57, (y + 26) / 57, 24.2) - 0.46) * 1.8;
+      const tint = wear * 0.16;
+      height[i] = grain * 0.85 + wear * 0.45;
+      const base = 38 + Math.floor(grain * 24);
+      diffuseData[i * 3 + 0] = Math.min(255, base + Math.floor(warmTint.r * 255 * tint));
+      diffuseData[i * 3 + 1] = Math.min(255, base + Math.floor(warmTint.g * 255 * tint));
+      diffuseData[i * 3 + 2] = Math.min(255, base + Math.floor(warmTint.b * 255 * tint));
+      roughData[i] = 178 + Math.floor((1 - grain) * 58 + wear * 10);
+    }
+  }
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = y * size + x;
+      const xl = (x + size - 1) % size;
+      const xr = (x + 1) % size;
+      const yu = (y + size - 1) % size;
+      const yd = (y + 1) % size;
+      const dx = height[y * size + xr] - height[y * size + xl];
+      const dy = height[yd * size + x] - height[yu * size + x];
+      const n = new THREE.Vector3(-dx * 2.2, -dy * 2.2, 1).normalize();
+      normalData[i * 3 + 0] = Math.floor((n.x * 0.5 + 0.5) * 255);
+      normalData[i * 3 + 1] = Math.floor((n.y * 0.5 + 0.5) * 255);
+      normalData[i * 3 + 2] = Math.floor((n.z * 0.5 + 0.5) * 255);
+    }
+  }
+
+  const wrap = THREE.RepeatWrapping;
+  const diffuseMap = new THREE.DataTexture(diffuseData, size, size, THREE.RGBFormat);
+  const roughnessMap = new THREE.DataTexture(roughData, size, size, THREE.RedFormat);
+  const normalMap = new THREE.DataTexture(normalData, size, size, THREE.RGBFormat);
+  [diffuseMap, roughnessMap, normalMap].forEach((tex) => {
+    tex.wrapS = wrap;
+    tex.wrapT = wrap;
+    tex.needsUpdate = true;
+    tex.colorSpace = THREE.NoColorSpace;
+  });
+  diffuseMap.colorSpace = THREE.SRGBColorSpace;
+  return { diffuseMap, roughnessMap, normalMap };
+}
+
+function leather(color, rough = 0.88, repeat = 3.4) {
+  const mat = new THREE.MeshStandardMaterial({
+    color,
+    map: LEATHER_SURFACE.diffuseMap.clone(),
+    roughnessMap: LEATHER_SURFACE.roughnessMap.clone(),
+    normalMap: LEATHER_SURFACE.normalMap.clone(),
+    roughness: rough,
+    metalness: 0,
+    normalScale: new THREE.Vector2(0.2, 0.2),
+    envMapIntensity: 0.32,
+  });
+  mat.map.repeat.set(repeat, repeat);
+  mat.roughnessMap.repeat.set(repeat, repeat);
+  mat.normalMap.repeat.set(repeat, repeat);
+  return mat;
 }
 
 function damp(cur, target, lambda, dt) {
@@ -34,41 +138,55 @@ function damp(cur, target, lambda, dt) {
 export function createGlove(side) {
   const s = side === 'right' ? 1 : -1;
   const mats = {
-    // High-visibility split-leather work gloves. The original charcoal hand
-    // disappeared against the cabinet; this keeps every articulated segment
-    // readable while the dark reinforcement pads still show the grip side.
-    leather: leather(side === 'right' ? 0xe08a3e : 0xd87c34, 0.82),
-    leatherPalm: leather(0xb95c28, 0.9),
-    pad: leather(0x202a38, 0.68),
-    cuff: leather(0x253247, 0.86),
-    accent: accentMat(side === 'right' ? 0xffb45d : 0x59e0ee),
+    leather: leather(side === 'right' ? 0x2f3136 : 0x303236, 0.86, 3.5),
+    leatherPalm: leather(0x282a2f, 0.91, 3.9),
+    pad: leather(0x1d2027, 0.77, 4.8),
+    cuff: leather(0x232730, 0.89, 3.2),
+    seam: leather(0x3f3833, 0.8, 9.5),
   };
 
   const root = new THREE.Group();
   root.name = `glove-${side}`;
 
-  const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.054, 0.047, 0.15, 20, 1, true), mats.cuff);
+  const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.053, 0.047, 0.145, 20, 1, true), mats.cuff);
   cuff.rotation.x = Math.PI / 2;
-  cuff.position.set(0, -0.004, -0.10);
+  cuff.position.set(0, -0.004, -0.094);
   root.add(cuff);
-  const cuffRing = new THREE.Mesh(new THREE.TorusGeometry(0.049, 0.006, 10, 22), mats.cuff);
-  cuffRing.position.set(0, -0.004, -0.033);
+  const cuffRing = new THREE.Mesh(new THREE.TorusGeometry(0.049, 0.0046, 12, 26), mats.cuff);
+  cuffRing.position.set(0, -0.004, -0.028);
   root.add(cuffRing);
 
   const palm = new THREE.Mesh(new RoundedBoxGeometry(PALM.w, PALM.t, PALM.l, 3, 0.009), mats.leatherPalm);
   palm.position.set(0, 0, PALM.l / 2 - 0.006);
   palm.castShadow = true;
   root.add(palm);
+  const thenar = new THREE.Mesh(new THREE.SphereGeometry(0.018, 16, 16), mats.leatherPalm);
+  thenar.scale.set(1.1, 0.68, 1.26);
+  thenar.position.set(0.026 * s, -0.0015, 0.047);
+  thenar.castShadow = true;
+  root.add(thenar);
+  const hypothenar = new THREE.Mesh(new THREE.SphereGeometry(0.0145, 14, 14), mats.leatherPalm);
+  hypothenar.scale.set(1.08, 0.66, 1.2);
+  hypothenar.position.set(-0.027 * s, -0.001, 0.056);
+  hypothenar.castShadow = true;
+  root.add(hypothenar);
   const palmPad = new THREE.Mesh(new RoundedBoxGeometry(PALM.w * 0.82, 0.012, PALM.l * 0.7, 2, 0.006), mats.pad);
   palmPad.position.set(0, -PALM.t / 2 - 0.004, PALM.l * 0.48);
   palmPad.castShadow = true;
   root.add(palmPad);
-  const strap = new THREE.Mesh(new RoundedBoxGeometry(PALM.w * 0.9, 0.012, 0.018, 2, 0.004), mats.accent);
-  strap.position.set(0, PALM.t / 2 + 0.002, 0.012);
+  const strap = new THREE.Mesh(new RoundedBoxGeometry(PALM.w * 0.86, 0.0105, 0.016, 2, 0.0038), mats.seam);
+  strap.position.set(0, PALM.t / 2 + 0.0005, 0.014);
   root.add(strap);
-  const knuckle = new THREE.Mesh(new RoundedBoxGeometry(PALM.w * 0.72, 0.014, 0.03, 2, 0.007), mats.pad);
+  const knuckle = new THREE.Mesh(new RoundedBoxGeometry(PALM.w * 0.7, 0.012, 0.032, 2, 0.007), mats.pad);
   knuckle.position.set(0, PALM.t / 2 - 0.004, PALM.front - 0.008);
   root.add(knuckle);
+  for (const spec of FINGERS) {
+    const knuckleCap = new THREE.Mesh(new THREE.SphereGeometry(spec.w * 0.44, 14, 12), mats.leatherPalm);
+    knuckleCap.scale.set(1.22, 0.72, 1.0);
+    knuckleCap.position.set(spec.x * s, PALM.t / 2 - 0.001, PALM.front + spec.dz - 0.002);
+    knuckleCap.castShadow = true;
+    root.add(knuckleCap);
+  }
 
   const fingerRigs = [];
   const tips = { index: null, thumb: null };
@@ -79,10 +197,21 @@ export function createGlove(side) {
     const joints = [mcp];
     let parent = mcp;
     spec.lens.forEach((len, i) => {
-      const seg = new THREE.Mesh(new RoundedBoxGeometry(spec.w, spec.w * 0.92, len, 2, spec.w * 0.32), mats.leather);
+      const taper = 1 - i * 0.115;
+      const seg = new THREE.Mesh(
+        new RoundedBoxGeometry(spec.w * taper, spec.w * (0.9 - i * 0.05), len, 2, spec.w * (0.3 - i * 0.02)),
+        mats.leather,
+      );
       seg.position.set(0, 0, len / 2);
       seg.castShadow = true;
       parent.add(seg);
+      if (i < spec.lens.length - 1) {
+        const jointBulge = new THREE.Mesh(new THREE.SphereGeometry(spec.w * (0.42 - i * 0.06), 12, 12), mats.leatherPalm);
+        jointBulge.scale.set(1.12, 0.94, 0.94);
+        jointBulge.position.set(0, 0, len - 0.001);
+        jointBulge.castShadow = true;
+        parent.add(jointBulge);
+      }
       if (i < spec.lens.length - 1) {
         const next = new THREE.Group();
         next.position.set(0, 0, len);
@@ -90,7 +219,7 @@ export function createGlove(side) {
         joints.push(next);
         parent = next;
       } else {
-        const tip = new THREE.Mesh(new RoundedBoxGeometry(spec.w * 0.94, spec.w * 0.8, 0.012, 2, spec.w * 0.3), mats.pad);
+        const tip = new THREE.Mesh(new RoundedBoxGeometry(spec.w * 0.84, spec.w * 0.73, 0.011, 2, spec.w * 0.24), mats.pad);
         tip.position.set(0, 0, len + 0.004);
         parent.add(tip);
         if (spec.key === 'index') {
@@ -112,10 +241,21 @@ export function createGlove(side) {
   {
     let parent = thumbBase;
     THUMB.lens.forEach((len, i) => {
-      const seg = new THREE.Mesh(new RoundedBoxGeometry(THUMB.w, THUMB.w * 0.95, len, 2, THUMB.w * 0.34), mats.leather);
+      const taper = 1 - i * 0.12;
+      const seg = new THREE.Mesh(
+        new RoundedBoxGeometry(THUMB.w * taper, THUMB.w * (0.94 - i * 0.06), len, 2, THUMB.w * 0.3),
+        mats.leather,
+      );
       seg.position.set(0, 0, len / 2);
       seg.castShadow = true;
       parent.add(seg);
+      if (i < THUMB.lens.length - 1) {
+        const thumbKnuckle = new THREE.Mesh(new THREE.SphereGeometry(THUMB.w * (0.36 - i * 0.05), 12, 12), mats.leatherPalm);
+        thumbKnuckle.scale.set(1.14, 0.96, 0.96);
+        thumbKnuckle.position.set(0, 0, len - 0.001);
+        thumbKnuckle.castShadow = true;
+        parent.add(thumbKnuckle);
+      }
       if (i < THUMB.lens.length - 1) {
         const next = new THREE.Group();
         next.position.set(0, 0, len);
@@ -136,8 +276,8 @@ export function createGlove(side) {
   const gripAnchor = new THREE.Object3D();
   root.add(gripAnchor);
 
-  const haloBase = new THREE.Color(side === 'right' ? 0xffc26b : 0x6fe3f5);
-  const haloHot = new THREE.Color(0xfff3da);
+  const haloBase = new THREE.Color(0x5e748f);
+  const haloHot = new THREE.Color(0x9fc7de);
   const halo = new THREE.Mesh(
     new THREE.TorusGeometry(0.02, 0.0032, 8, 24),
     new THREE.MeshBasicMaterial({ color: haloBase.clone(), transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false }),
