@@ -913,6 +913,13 @@ function startMacro(name) {
   if (session.macro.running) { toast('Autopilot already running'); return; }
   const fn = MACROS[name];
   if (!fn) { toast(`Unknown macro: ${name}`); return; }
+  // The neutral demo pose faces the open glove toward the viewer. Scripted QA
+  // rotates into the established tool-working orientation before approaching
+  // fixtures so its pinch anchor retains the validated interaction envelope.
+  for (const side of ['left', 'right']) {
+    input.hands[side].target.yaw = Math.PI;
+    input.hands[side].target.pitch = -0.18;
+  }
   session.started = true;
   $('intro').hidden = true;
   $('practice-card').hidden = false;
