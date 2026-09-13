@@ -77,7 +77,10 @@ function makeLeatherSurface() {
       const wear = Math.max(0, octaveNoise((x + 70) / 57, (y + 26) / 57, 24.2) - 0.46) * 1.8;
       const tint = wear * 0.16;
       height[i] = grain * 0.85 + wear * 0.45;
-      const base = 38 + Math.floor(grain * 24);
+      // Keep the grain light enough to carry an industrial glove colour in a
+      // dark under-sink bay. The previous near-black albedo multiplied every
+      // material colour down until the hands disappeared in captured video.
+      const base = 112 + Math.floor(grain * 44);
       diffuseData[i * 3 + 0] = Math.min(255, base + Math.floor(warmTint.r * 255 * tint));
       diffuseData[i * 3 + 1] = Math.min(255, base + Math.floor(warmTint.g * 255 * tint));
       diffuseData[i * 3 + 2] = Math.min(255, base + Math.floor(warmTint.b * 255 * tint));
@@ -117,15 +120,18 @@ function makeLeatherSurface() {
 function leather(color, rough = 0.94, repeat = 3.4) {
   const mat = new THREE.MeshStandardMaterial({
     color,
-    map: LEATHER_SURFACE.diffuseMap.clone(),
+    // Colour comes from the material itself; the former dark diffuse map
+    // multiplied safety colours almost back to black. Normal and roughness
+    // maps retain the leather grain without sacrificing silhouette contrast.
     normalMap: LEATHER_SURFACE.normalMap.clone(),
+    roughnessMap: LEATHER_SURFACE.roughnessMap.clone(),
     roughness: rough,
     metalness: 0,
     normalScale: new THREE.Vector2(0.14, 0.14),
-    envMapIntensity: 0.05,
+    envMapIntensity: 0.16,
   });
-  mat.map.repeat.set(repeat, repeat);
   mat.normalMap.repeat.set(repeat, repeat);
+  mat.roughnessMap.repeat.set(repeat, repeat);
   return mat;
 }
 
@@ -136,11 +142,20 @@ function damp(cur, target, lambda, dt) {
 export function createGlove(side) {
   const s = side === 'right' ? 1 : -1;
   const mats = {
-    leather: leather(side === 'right' ? 0x17191d : 0x15171a, 0.99, 3.5),
-    leatherPalm: leather(0x111317, 1.0, 3.9),
-    pad: leather(0x090b0e, 1.0, 4.8),
-    cuff: leather(0x101318, 1.0, 3.2),
-    seam: leather(0x241d19, 0.98, 9.5),
+    // Safety-blue backs separate clearly from the cabinet while the graphite
+    // grip surfaces preserve a believable professional work-glove finish.
+    leather: leather(side === 'right' ? 0x328da7 : 0x27778f, 0.92, 3.5),
+    leatherPalm: leather(0x343b43, 0.97, 3.9),
+    pad: leather(0x171b20, 1.0, 4.8),
+    cuff: leather(0x255f72, 0.94, 3.2),
+    seam: new THREE.MeshStandardMaterial({ color: 0xf08a24, roughness: 0.78, metalness: 0.02 }),
+    reflective: new THREE.MeshStandardMaterial({
+      color: 0xffb343,
+      emissive: 0x7a2d00,
+      emissiveIntensity: 0.18,
+      roughness: 0.62,
+      metalness: 0.04,
+    }),
   };
 
   const root = new THREE.Group();
@@ -182,6 +197,15 @@ export function createGlove(side) {
   const strap = new THREE.Mesh(new RoundedBoxGeometry(PALM.w * 0.86, 0.0105, 0.016, 2, 0.0038), mats.seam);
   strap.position.set(0, PALM.t / 2 + 0.0005, 0.014);
   root.add(strap);
+  // A restrained hi-vis chevron gives judges an immediate hand silhouette
+  // without turning the glove into a neon controller prop.
+  for (const x of [-0.019, 0.019]) {
+    const marker = new THREE.Mesh(new RoundedBoxGeometry(0.012, 0.006, 0.046, 2, 0.003), mats.reflective);
+    marker.position.set(x, PALM.t / 2 + 0.005, 0.059);
+    marker.rotation.y = x * s > 0 ? -0.22 : 0.22;
+    marker.castShadow = true;
+    root.add(marker);
+  }
   const knuckle = new THREE.Mesh(new RoundedBoxGeometry(PALM.w * 0.7, 0.012, 0.032, 2, 0.007), mats.pad);
   knuckle.position.set(0, PALM.t / 2 - 0.004, PALM.front - 0.008);
   root.add(knuckle);

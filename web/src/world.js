@@ -84,6 +84,12 @@ export function createWorld({ canvas }) {
   fill.position.set(-1.1, 1.35, 2.3);
   scene.add(fill);
 
+  // Soft camera-side task light keeps the learner's gloves readable against
+  // the charcoal cabinet in both webcam use and compressed demo footage.
+  const gloveFill = new THREE.PointLight(0xb8e8ff, 2.1, 1.7, 1.75);
+  gloveFill.position.set(0, 0.72, 1.18);
+  scene.add(gloveFill);
+
   const rim = new THREE.PointLight(0x9fd4ff, 2.6, 3.2, 1.8);
   rim.position.set(-0.95, 0.5, -0.35);
   scene.add(rim);
