@@ -5,7 +5,8 @@ PipeSense is a CoreWeave Hacks project: a first-person, gesture-driven plumbing 
 **Live demo:** <https://pipesense-training.vercel.app>
 
 **Submission assets:** [Maya-narrated demo](https://pipesense-training.vercel.app/submission/pipesense-demo-maya.mp4) ·
-[Dropbox demo](https://www.dropbox.com/scl/fi/um50jd83usutpjpi5lnp8/PipeSense-Maya-Demo.mp4?rlkey=t1zondfw6u4p44hjxwxfts2lm&dl=0) ·
+[Dropbox final folder](https://www.dropbox.com/scl/fo/yynqa5zlxgrqmoq635ndq/AG5o4oieY0PHHI2_dET08i4?rlkey=facx72u9oeze37c6qz9tsd63k&dl=0) ·
+[direct Dropbox demo](https://www.dropbox.com/scl/fi/m766ouu3b2k9ohbtmg2gl/PipeSense-Final-Demo.mp4?rlkey=n15zla6pjbhk4wi8kkvr4hexs&dl=0) ·
 [silent backup](https://pipesense-training.vercel.app/submission/pipesense-demo-silent.mp4) ·
 [W&B presentation page](https://pipesense-training.vercel.app/submission/wandb-story-slide.png)
 

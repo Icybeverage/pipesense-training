@@ -122,7 +122,7 @@ the trace recorded.
   coaching keeps the demo alive without network; the judge drawer labels live
   backend evidence versus local fallback honestly; deployed and smoke-tested
   end to end.
-- **Best Social Media Demo** — The public 62-second H.264/AAC cut has Maya's
+- **Best Social Media Demo** — The public 74-second H.264/AAC cut has Maya's
   conversational narration, a visible failure-to-success arc, and a final W&B
   evidence frame that makes the sponsor integration legible without extra
   explanation.
@@ -131,10 +131,12 @@ the trace recorded.
 
 - Live demo: <https://pipesense-training.vercel.app>
 - Repository: <https://github.com/Icybeverage/pipesense-training>
-- Narrated demo (Maya, 62 s):
+- Narrated demo (Maya, 74 s):
   <https://pipesense-training.vercel.app/submission/pipesense-demo-maya.mp4>
 - Dropbox demo:
-  <https://www.dropbox.com/scl/fi/um50jd83usutpjpi5lnp8/PipeSense-Maya-Demo.mp4?rlkey=t1zondfw6u4p44hjxwxfts2lm&dl=0>
+  <https://www.dropbox.com/scl/fi/m766ouu3b2k9ohbtmg2gl/PipeSense-Final-Demo.mp4?rlkey=n15zla6pjbhk4wi8kkvr4hexs&dl=0>
+- Dropbox final folder:
+  <https://www.dropbox.com/scl/fo/yynqa5zlxgrqmoq635ndq/AG5o4oieY0PHHI2_dET08i4?rlkey=facx72u9oeze37c6qz9tsd63k&dl=0>
 - Silent backup:
   <https://pipesense-training.vercel.app/submission/pipesense-demo-silent.mp4>
 - W&B presentation page:

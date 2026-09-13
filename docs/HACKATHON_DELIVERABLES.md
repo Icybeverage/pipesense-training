@@ -48,9 +48,9 @@ session. Public event: <https://luma.com/coreweavehacks>.
 
 ### Final handoff
 
-- [ ] Record one concise end-to-end demo showing hand calibration, one failure,
+- [x] Record one concise end-to-end demo showing hand calibration, one failure,
   Maya's intervention, a retry, the sealed result, and the Weave trace.
-- [ ] Provide the repository URL and working demo URL in the event submission
+- [x] Provide the repository URL and working demo URL in the event submission
   form once the organizers expose or confirm that form.
 - [ ] Keep a silent backup recording or captioned path in case venue audio or
   network access fails.
